@@ -1,7 +1,6 @@
 // Integration test against a real broker. Skipped unless MQTT_LIVE_PORT is
 // set, e.g. with a local mosquitto that requires user "hub" / MQTT_LIVE_PW:
 //   MQTT_LIVE_PORT=18830 MQTT_LIVE_PW='s3cret!' flutter test test/mqtt_live_test.dart
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 

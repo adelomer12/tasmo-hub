@@ -65,11 +65,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: const Text('Refresh interval'),
         children: [
           for (final s in const [0, 5, 10, 30, 60])
-            RadioListTile<int>(
-              value: s,
-              groupValue: store.pollSeconds,
+            ListTile(
+              leading: Icon(s == store.pollSeconds
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
               title: Text(s == 0 ? 'Manual only' : 'Every $s s'),
-              onChanged: (x) => Navigator.pop(ctx, x),
+              onTap: () => Navigator.pop(ctx, s),
             ),
         ],
       ),
