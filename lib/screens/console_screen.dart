@@ -21,7 +21,14 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   final List<(String, String, bool)> _log = [];
   bool _busy = false;
 
-  static const _quick = ['Status 0', 'Status 8', 'Power', 'Timers', 'Rule1', 'IPAddress'];
+  static const _quick = [
+    'Status 0',
+    'Status 8',
+    'Power',
+    'Timers',
+    'Rule1',
+    'IPAddress'
+  ];
 
   @override
   void dispose() {
@@ -71,10 +78,13 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('> $cmd', style: mono?.copyWith(fontWeight: FontWeight.bold)),
+                    Text('> $cmd',
+                        style: mono?.copyWith(fontWeight: FontWeight.bold)),
                     SelectableText(out,
                         style: mono?.copyWith(
-                            color: err ? Theme.of(context).colorScheme.error : null)),
+                            color: err
+                                ? Theme.of(context).colorScheme.error
+                                : null)),
                   ],
                 ),
               );
@@ -115,7 +125,9 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
                 onPressed: _busy ? null : _send,
                 icon: _busy
                     ? const SizedBox(
-                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.send),
               ),
             ]),

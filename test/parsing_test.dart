@@ -64,16 +64,20 @@ void main() {
     final api = TasmotaApi(
         client: MockClient((_) async => http.Response(
             '{"WARNING":"Need user=<username>&password=<password>"}', 200)));
-    expect(api.send('10.0.0.5', 'Status 0'), throwsA(isA<AuthRequiredException>()));
+    expect(api.send('10.0.0.5', 'Status 0'),
+        throwsA(isA<AuthRequiredException>()));
   });
 
   test('builds /cm URI with encoded credentials', () {
-    final uri = TasmotaApi().buildUri('192.168.20.31', 'Backlog Power1 ON; Dimmer 50',
+    final uri = TasmotaApi().buildUri(
+        '192.168.20.31', 'Backlog Power1 ON; Dimmer 50',
         username: 'admin', password: 'p&ss=1');
     expect(uri.path, '/cm');
     expect(uri.queryParameters['password'], 'p&ss=1');
     expect(uri.queryParameters['cmnd'], 'Backlog Power1 ON; Dimmer 50');
-    expect(TasmotaApi().buildUri('h', 'Power').queryParameters.containsKey('user'), isFalse);
+    expect(
+        TasmotaApi().buildUri('h', 'Power').queryParameters.containsKey('user'),
+        isFalse);
   });
 
   test('IPv4 range parsing', () {

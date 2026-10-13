@@ -56,8 +56,7 @@ class TasmotaApi {
     String? password,
     Duration timeout = const Duration(seconds: 4),
   }) async {
-    final uri =
-        buildUri(host, command, username: username, password: password);
+    final uri = buildUri(host, command, username: username, password: password);
     final http.Response res;
     try {
       res = await _client.get(uri).timeout(timeout);
@@ -96,8 +95,8 @@ class TasmotaApi {
   /// Fetches the full status (`Status 0`) and parses it into a DeviceState.
   Future<DeviceState> fetchState(String host,
       {String? username, String? password}) async {
-    final j = await send(host, 'Status 0',
-        username: username, password: password);
+    final j =
+        await send(host, 'Status 0', username: username, password: password);
     return parseStatus0(j);
   }
 
@@ -130,6 +129,7 @@ DeviceState parseStatus0(Map<String, dynamic> j) {
   if (fn is List && fn.isNotEmpty) s.friendlyName = '${fn.first}';
   if (fn is String) s.friendlyName = fn;
   s.deviceName = '${status['DeviceName'] ?? ''}';
+  s.topic = '${status['Topic'] ?? ''}';
   final mod = status['Module'];
   if (mod is num) s.module = mod.toInt();
 
@@ -208,7 +208,9 @@ List<SensorReading> flattenSensors(Map<String, dynamic> sns) {
         final iv = inner.value;
         if (iv is Map || iv is List) continue;
         if (inner.key == 'TotalStartTime' || inner.key == 'Id') continue;
-        out.add(SensorReading(e.key, '${inner.key}',
+        out.add(SensorReading(
+            e.key,
+            '${inner.key}',
             iv is int ? iv : (iv is num ? iv.toDouble() : iv),
             _unitFor('${inner.key}', sns)));
       }
@@ -224,7 +226,15 @@ FirmwareType detectFirmware(DeviceState s, {String? indexHtml}) {
   final v = s.version.toLowerCase();
   final hw = s.hardware.toLowerCase();
   if (v.contains('tasmota')) return FirmwareType.tasmota;
-  const obkChips = ['bk72', 'bl602', 'w800', 'w600', 'xr809', 'ln882', 'openbk'];
+  const obkChips = [
+    'bk72',
+    'bl602',
+    'w800',
+    'w600',
+    'xr809',
+    'ln882',
+    'openbk'
+  ];
   if (obkChips.any((c) => hw.contains(c) || v.contains(c))) {
     return FirmwareType.openbeken;
   }

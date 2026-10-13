@@ -103,8 +103,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           TextField(
             controller: _pw,
             obscureText: true,
-            decoration: const InputDecoration(
-                labelText: 'Web password (if set)'),
+            decoration:
+                const InputDecoration(labelText: 'Web password (if set)'),
           ),
           if (_error != null)
             Padding(
@@ -122,7 +122,9 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(
-                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Add'),
         ),
       ],
@@ -132,7 +134,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
 
 /// Edit name, room, address and credentials of a saved device.
 class EditDeviceDialog extends StatefulWidget {
-  const EditDeviceDialog({super.key, required this.store, required this.device});
+  const EditDeviceDialog(
+      {super.key, required this.store, required this.device});
   final DeviceStore store;
   final Device device;
 
@@ -145,12 +148,13 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
   late final _room = TextEditingController(text: widget.device.room);
   late final _host = TextEditingController(text: widget.device.host);
   late final _user = TextEditingController(text: widget.device.username);
+  late final _topic = TextEditingController(text: widget.device.mqttTopic);
   final _pw = TextEditingController();
   bool _changePw = false;
 
   @override
   void dispose() {
-    for (final c in [_name, _room, _host, _user, _pw]) {
+    for (final c in [_name, _room, _host, _user, _topic, _pw]) {
       c.dispose();
     }
     super.dispose();
@@ -162,7 +166,8 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
         name: _name.text.trim().isEmpty ? d.name : _name.text.trim(),
         room: _room.text.trim(),
         host: _host.text.trim().isEmpty ? d.host : _host.text.trim(),
-        username: _user.text.trim());
+        username: _user.text.trim(),
+        mqttTopic: _topic.text.trim());
     if (_changePw) await widget.store.setPassword(d, _pw.text);
     await widget.store.refresh(d);
     if (mounted) Navigator.pop(context);
@@ -184,13 +189,16 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
           if (rooms.isNotEmpty)
             Wrap(spacing: 6, children: [
               for (final r in rooms)
-                ActionChip(
-                    label: Text(r), onPressed: () => _room.text = r),
+                ActionChip(label: Text(r), onPressed: () => _room.text = r),
             ]),
           TextField(
               controller: _host,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(labelText: 'IP or hostname')),
+          TextField(
+              controller: _topic,
+              decoration: const InputDecoration(
+                  labelText: 'MQTT topic', hintText: 'tasmota_A1B2C3')),
           TextField(
               controller: _user,
               decoration: const InputDecoration(labelText: 'Web user')),

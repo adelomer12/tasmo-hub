@@ -59,7 +59,8 @@ class DeviceTile extends StatelessWidget {
             children: [
               Icon(
                 s.hasLight ? Icons.lightbulb_outline : Icons.power_outlined,
-                color: s.anyOn ? theme.colorScheme.primary : theme.disabledColor,
+                color:
+                    s.anyOn ? theme.colorScheme.primary : theme.disabledColor,
               ),
               const SizedBox(width: 12),
               Expanded(

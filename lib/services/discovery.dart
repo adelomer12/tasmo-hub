@@ -110,7 +110,9 @@ bool isPrivateIPv4(String host) {
         inNet('100.64.0.0', 10); // CGNAT / Tailscale
   } catch (_) {
     // Hostnames: only trust mDNS-style local names.
-    return host.endsWith('.local') || host.endsWith('.lan') || !host.contains('.');
+    return host.endsWith('.local') ||
+        host.endsWith('.lan') ||
+        !host.contains('.');
   }
 }
 
@@ -129,8 +131,8 @@ class DiscoveryService {
       if (ip != null && ip.contains('.')) return Ipv4Range.cidr24For(ip);
     } catch (_) {}
     try {
-      for (final iface in await NetworkInterface.list(
-          type: InternetAddressType.IPv4)) {
+      for (final iface
+          in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
         for (final a in iface.addresses) {
           if (!a.isLoopback && isPrivateIPv4(a.address)) {
             return Ipv4Range.cidr24For(a.address);
@@ -152,13 +154,14 @@ class DiscoveryService {
       return null;
     }
     try {
-      final st = await api.fetchState(host,
-          username: username, password: password);
+      final st =
+          await api.fetchState(host, username: username, password: password);
       var type = detectFirmware(st);
       if (type == FirmwareType.unknown) {
         type = detectFirmware(st, indexHtml: await api.fetchIndex(host));
       }
-      return DiscoveredDevice(host: host, type: type, state: st, source: source);
+      return DiscoveredDevice(
+          host: host, type: type, state: st, source: source);
     } on AuthRequiredException {
       final html = await api.fetchIndex(host);
       return DiscoveredDevice(
@@ -204,17 +207,19 @@ class DiscoveryService {
   /// builds). Multicast does not cross VLANs unless the router reflects it.
   Stream<DiscoveredDevice> mdns(
       {Duration timeout = const Duration(seconds: 5)}) async* {
-    final client = MDnsClient(rawDatagramSocketFactory: (dynamic host, int port,
-            {bool reuseAddress = true, bool reusePort = false, int ttl = 1}) =>
-        RawDatagramSocket.bind(host, port,
-            reuseAddress: true, reusePort: false, ttl: ttl));
+    final client = MDnsClient(
+        rawDatagramSocketFactory: (dynamic host, int port,
+                {bool reuseAddress = true,
+                bool reusePort = false,
+                int ttl = 1}) =>
+            RawDatagramSocket.bind(host, port,
+                reuseAddress: true, reusePort: false, ttl: ttl));
     final seen = <String>{};
     try {
       await client.start();
-      await for (final ptr in client
-          .lookup<PtrResourceRecord>(
-              ResourceRecordQuery.serverPointer('_http._tcp.local'),
-              timeout: timeout)) {
+      await for (final ptr in client.lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer('_http._tcp.local'),
+          timeout: timeout)) {
         if (_cancelled) break;
         await for (final srv in client.lookup<SrvResourceRecord>(
             ResourceRecordQuery.service(ptr.domainName),

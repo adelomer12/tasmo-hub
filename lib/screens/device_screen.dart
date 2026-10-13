@@ -146,8 +146,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
                               : 'Relay ${k.replaceFirst('POWER', '')}'),
                           value: s.power[k] ?? false,
                           onChanged: s.online
-                              ? (v) => store.setPower(d, k, v).catchError(
-                                  (Object e) {
+                              ? (v) => store
+                                      .setPower(d, k, v)
+                                      .catchError((Object e) {
                                     if (context.mounted) showError(context, e);
                                   })
                               : null,
@@ -164,7 +165,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
                         if (s.dimmer != null)
                           _slider(
                             icon: Icons.brightness_6,
-                            label: 'Brightness ${(_dimmer ?? s.dimmer!.toDouble()).round()}%',
+                            label:
+                                'Brightness ${(_dimmer ?? s.dimmer!.toDouble()).round()}%',
                             value: _dimmer ?? s.dimmer!.toDouble(),
                             min: 0,
                             max: 100,
@@ -195,8 +197,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
                             value: _hue ?? s.hsb![0].toDouble(),
                             min: 0,
                             max: 360,
-                            color: HSVColor.fromAHSV(
-                                    1, (_hue ?? s.hsb![0].toDouble()) % 360, 1, 1)
+                            color: HSVColor.fromAHSV(1,
+                                    (_hue ?? s.hsb![0].toDouble()) % 360, 1, 1)
                                 .toColor(),
                             onChanged: (v) => setState(() => _hue = v),
                             onEnd: (v) async {
@@ -247,15 +249,23 @@ class _DeviceScreenState extends State<DeviceScreen> {
                     _info('Address', d.host),
                     _info('Hostname', s.hostname),
                     _info('MAC', s.mac.isNotEmpty ? s.mac : d.mac),
-                    _info('Wi-Fi',
-                        [if (s.ssid.isNotEmpty) s.ssid, if (s.rssi != null) 'RSSI ${s.rssi}%', if (s.signal != null) '${s.signal} dBm'].join(' · ')),
+                    _info(
+                        'Wi-Fi',
+                        [
+                          if (s.ssid.isNotEmpty) s.ssid,
+                          if (s.rssi != null) 'RSSI ${s.rssi}%',
+                          if (s.signal != null) '${s.signal} dBm'
+                        ].join(' · ')),
                     _info('Uptime', s.uptime),
                     _info('Room', d.room),
+                    _info('MQTT topic', d.mqttTopic),
+                    _info('Link', store.usesMqtt(d) ? 'MQTT' : 'HTTP'),
                     _info(
                         'Updated',
                         s.updated == null
                             ? ''
-                            : TimeOfDay.fromDateTime(s.updated!).format(context)),
+                            : TimeOfDay.fromDateTime(s.updated!)
+                                .format(context)),
                   ]),
                 ),
               ],

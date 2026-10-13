@@ -25,6 +25,9 @@ class Device {
     this.type = FirmwareType.unknown,
     this.username = 'admin',
     this.mac = '',
+    this.mqttTopic = '',
+    this.fullTopic = '',
+    this.prefixes = const ['cmnd', 'stat', 'tele'],
   });
 
   /// Stable id: MAC when known (survives DHCP changes), otherwise host.
@@ -36,6 +39,19 @@ class Device {
   String username;
   String mac;
 
+  /// Tasmota `Topic` (e.g. tasmota_A1B2C3). Empty = not usable over MQTT.
+  String mqttTopic;
+
+  /// Tasmota `FullTopic`; empty means the default `%prefix%/%topic%/`.
+  String fullTopic;
+
+  /// cmnd / stat / tele prefixes (Prefix1..3), in that order.
+  List<String> prefixes;
+
+  String get cmndPrefix => prefixes[0];
+  String get statPrefix => prefixes[1];
+  String get telePrefix => prefixes[2];
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'host': host,
@@ -44,6 +60,9 @@ class Device {
         'type': type.name,
         'username': username,
         'mac': mac,
+        'mqttTopic': mqttTopic,
+        'fullTopic': fullTopic,
+        'prefixes': prefixes,
       };
 
   factory Device.fromJson(Map<String, dynamic> j) => Device(
@@ -54,6 +73,11 @@ class Device {
         type: firmwareTypeFromName(j['type'] as String?),
         username: (j['username'] as String?) ?? 'admin',
         mac: (j['mac'] as String?) ?? '',
+        mqttTopic: (j['mqttTopic'] as String?) ?? '',
+        fullTopic: (j['fullTopic'] as String?) ?? '',
+        prefixes: (j['prefixes'] is List && (j['prefixes'] as List).length >= 3)
+            ? (j['prefixes'] as List).map((e) => '$e').toList()
+            : const ['cmnd', 'stat', 'tele'],
       );
 
   static String encodeList(List<Device> list) =>
@@ -85,6 +109,12 @@ class DeviceState {
 
   bool online;
   bool authRequired;
+
+  /// Last update came from MQTT rather than HTTP.
+  bool viaMqtt = false;
+
+  /// From the retained `tele/<topic>/LWT` (null = unknown).
+  bool? lwtOnline;
   String? error;
   DateTime? updated;
 
@@ -108,6 +138,7 @@ class DeviceState {
   int? rssi;
   int? signal;
   String ssid = '';
+  String topic = '';
   int? module;
 
   bool get hasLight => dimmer != null || hsb != null || ct != null;

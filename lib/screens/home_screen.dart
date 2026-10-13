@@ -6,6 +6,8 @@ import '../widgets/device_tile.dart';
 import 'device_edit_dialog.dart';
 import 'device_screen.dart';
 import 'discovery_screen.dart';
+import 'mqtt_settings_screen.dart';
+import '../services/mqtt_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.store});
@@ -43,10 +45,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openScan() async {
-    await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => DiscoveryScreen(store: store)));
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => DiscoveryScreen(store: store)));
     store.refreshAll();
   }
+
+  Future<void> _openMqtt() => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MqttSettingsScreen(store: store)));
 
   Future<void> _addManual() async {
     await showDialog<void>(
@@ -82,17 +87,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           appBar: AppBar(
             title: const Text('TasmoHub'),
             actions: [
+              if (store.mqtt.state != MqttLinkState.disabled)
+                IconButton(
+                  tooltip: 'MQTT: ${store.mqtt.state.name}',
+                  onPressed: _openMqtt,
+                  icon: Icon(
+                    Icons.hub_outlined,
+                    color: switch (store.mqtt.state) {
+                      MqttLinkState.connected => Colors.green,
+                      MqttLinkState.error => Colors.red,
+                      _ => Colors.amber,
+                    },
+                  ),
+                ),
               IconButton(
                   tooltip: 'Refresh',
                   icon: const Icon(Icons.refresh),
-                  onPressed: store.refreshAll),
+                  onPressed: () => store.refreshAll(force: true)),
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'add') _addManual();
                   if (v == 'settings') _settings();
+                  if (v == 'mqtt') _openMqtt();
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'add', child: Text('Add by IP')),
+                  PopupMenuItem(value: 'mqtt', child: Text('MQTT broker')),
                   PopupMenuItem(
                       value: 'settings', child: Text('Refresh interval')),
                 ],
@@ -107,13 +127,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           body: devices.isEmpty
               ? _EmptyState(onScan: _openScan, onAdd: _addManual)
               : RefreshIndicator(
-                  onRefresh: store.refreshAll,
+                  onRefresh: () => store.refreshAll(force: true),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
                     children: [
                       for (final room in store.rooms) ...[
                         _RoomHeader(store: store, room: room),
-                        for (final d in devices.where((d) => d.room.trim() == room))
+                        for (final d
+                            in devices.where((d) => d.room.trim() == room))
                           DeviceTile(
                             store: store,
                             device: d,

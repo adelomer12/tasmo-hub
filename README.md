@@ -16,8 +16,33 @@ device's `/cm?cmnd=` HTTP API.
   every sensor from `StatusSNS` (energy, climate, etc.), firmware/hardware/IP/MAC/Wi-Fi/uptime.
 - **Console** for raw commands (`Backlog`, `Rule1`, `Timers`…), with pretty-printed JSON.
 - Edit name / room / address / credentials, open the device web UI, restart, remove.
+- Optional MQTT: live push updates, control through the broker, Tasmota MQTT discovery.
 - Polls every N seconds (configurable, or manual) only while the app is in the foreground.
 - Devices are keyed by MAC, so a DHCP address change can be fixed by re-scanning.
+
+## MQTT (optional)
+
+Menu → **MQTT broker**: host, port, TLS (with an explicit, off-by-default
+"accept self-signed" switch), username/password (stored in the keystore).
+
+- **Live updates**: subscribes per device to `stat/<topic>/#` and `tele/<topic>/#`
+  (honours a custom `FullTopic` and prefixes), and handles `LWT`, `STATE`, `SENSOR`,
+  `RESULT`, `POWERn` and `STATUS0/8/10`. Polling skips MQTT devices, which push changes.
+- **Control over MQTT**: commands go to `cmnd/<topic>/<Command>` and wait for
+  `stat/<topic>/RESULT`. This works even when the phone cannot reach the IoT VLAN
+  over HTTP, as long as it can reach the broker. Can be turned off so MQTT is
+  used for updates only.
+- **Broker discovery**: reads Tasmota's retained `tasmota/discovery/<MAC>/config`
+  (SetOption19 0, the default) and lists those devices in *Find devices* without
+  any network scan. Saved devices whose IP changed get updated automatically.
+- The MQTT topic is picked up from `Status 0` for HTTP-added devices and can be
+  edited per device. OpenBeken devices are controlled through the Tasmota-style
+  `cmnd/<topic>/...` topics; if a build does not publish `stat/` replies, HTTP still
+  covers its state.
+
+Suggested broker hardening: per-user ACLs (the app's user only needs
+`cmnd/#` write and `stat/#`, `tele/#`, `tasmota/discovery/#` read), TLS on 8883,
+and no anonymous access.
 
 ## Security model
 
@@ -41,6 +66,8 @@ device's `/cm?cmnd=` HTTP API.
 ```bash
 flutter pub get
 flutter test
+# optional, against a real broker:
+MQTT_LIVE_PORT=1883 MQTT_LIVE_PW=... flutter test test/mqtt_live_test.dart
 flutter build apk --release          # Android
 flutter build ipa                    # iOS (needs Xcode + signing)
 ```
@@ -54,7 +81,6 @@ is pushed to GitHub.
 
 ## Roadmap
 
-- MQTT mode (subscribe to `tele/+/STATE` and `stat/+/RESULT` for instant updates)
 - Home-screen widgets and quick-settings tiles
 - Timers / rules editor, firmware upgrade (`Upgrade 1`) and backup of `Status`/settings
 - Scenes across devices

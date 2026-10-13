@@ -82,20 +82,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       if (mounted) setState(() => _found[d.host] = d);
     }
 
-    _subs.add(_svc
-        .scan(range,
-            password: _pw.text.isEmpty ? null : _pw.text,
-            onProgress: (done, total) {
-              if (mounted) setState(() => _done = done);
-            })
-        .listen(onFound, onDone: finished));
+    _subs.add(_svc.scan(range, password: _pw.text.isEmpty ? null : _pw.text,
+        onProgress: (done, total) {
+      if (mounted) setState(() => _done = done);
+    }).listen(onFound, onDone: finished));
     if (_useMdns) {
       _subs.add(_svc.mdns().listen(onFound, onDone: finished));
     }
   }
 
   bool _isSaved(DiscoveredDevice d) => widget.store.devices.any((e) =>
-      e.host == d.host || (d.state != null && d.state!.mac.isNotEmpty && e.mac == d.state!.mac));
+      e.host == d.host ||
+      (d.state != null && d.state!.mac.isNotEmpty && e.mac == d.state!.mac));
 
   Future<void> _add(DiscoveredDevice d) async {
     if (d.authRequired) {
@@ -130,7 +128,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   @override
   Widget build(BuildContext context) {
     final list = _found.values.toList()
-      ..sort((a, b) => Ipv4Range.ipToInt(a.host).compareTo(Ipv4Range.ipToInt(b.host)));
+      ..sort((a, b) =>
+          Ipv4Range.ipToInt(a.host).compareTo(Ipv4Range.ipToInt(b.host)));
     final addable = list.where((d) => !d.authRequired && !_isSaved(d)).length;
     return Scaffold(
       appBar: AppBar(
@@ -166,7 +165,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _useMdns,
-                onChanged: _running ? null : (v) => setState(() => _useMdns = v),
+                onChanged:
+                    _running ? null : (v) => setState(() => _useMdns = v),
                 title: const Text('Also browse mDNS'),
               ),
               Row(children: [
@@ -180,7 +180,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
                 const SizedBox(width: 12),
                 _running
-                    ? OutlinedButton(onPressed: _stop, child: const Text('Stop'))
+                    ? OutlinedButton(
+                        onPressed: _stop, child: const Text('Stop'))
                     : FilledButton.icon(
                         onPressed: _start,
                         icon: const Icon(Icons.radar),
@@ -190,32 +191,62 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           ),
           const Divider(height: 24),
           Expanded(
-            child: ListView.builder(
-              itemCount: list.length,
-              itemBuilder: (_, i) {
-                final d = list[i];
-                final saved = _isSaved(d);
-                final sub = [
-                  d.host,
-                  firmwareLabel(d.type),
-                  if (d.state?.version.isNotEmpty ?? false) d.state!.version,
-                  if (d.source != 'scan') d.source,
-                ].join(' · ');
-                return ListTile(
-                  leading: Icon(d.authRequired ? Icons.lock_outline : Icons.memory),
-                  title: Text(d.authRequired ? '${d.host} (password protected)' : d.displayName),
-                  subtitle: Text(sub),
-                  trailing: saved
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : IconButton(
+            child: ListenableBuilder(
+              listenable: widget.store,
+              builder: (context, _) {
+                final fromBroker = widget.store.mqttDiscovered.values
+                    .where((i) =>
+                        (i.mac.isEmpty || widget.store.byMac(i.mac) == null) &&
+                        !list.any((d) => d.host == i.ip && _isSaved(d)))
+                    .toList()
+                  ..sort((a, b) => a.name.compareTo(b.name));
+                return ListView(children: [
+                  if (fromBroker.isNotEmpty) ...[
+                    const ListTile(
+                        dense: true,
+                        title: Text('Announced on the MQTT broker')),
+                    for (final i in fromBroker)
+                      ListTile(
+                        leading: const Icon(Icons.hub_outlined),
+                        title: Text(i.name),
+                        subtitle: Text('${i.ip} · ${i.topic} · ${i.version}'),
+                        trailing: IconButton(
                           icon: const Icon(Icons.add_circle_outline),
-                          onPressed: () => _add(d)),
-                );
+                          onPressed: () => widget.store.addDiscovered(i),
+                        ),
+                      ),
+                    if (list.isNotEmpty)
+                      const ListTile(dense: true, title: Text('Network scan')),
+                  ],
+                  for (final d in list) _scanTile(d),
+                ]);
               },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _scanTile(DiscoveredDevice d) {
+    final saved = _isSaved(d);
+    final sub = [
+      d.host,
+      firmwareLabel(d.type),
+      if (d.state?.version.isNotEmpty ?? false) d.state!.version,
+      if (d.source != 'scan') d.source,
+    ].join(' · ');
+    return ListTile(
+      key: ValueKey(d.host),
+      leading: Icon(d.authRequired ? Icons.lock_outline : Icons.memory),
+      title: Text(
+          d.authRequired ? '${d.host} (password protected)' : d.displayName),
+      subtitle: Text(sub),
+      trailing: saved
+          ? const Icon(Icons.check_circle, color: Colors.green)
+          : IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              onPressed: () => _add(d)),
     );
   }
 }
