@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tasmota/OpenBeken only speak plain HTTP on the LAN, so cleartext must be
+     allowed. The app itself only ever talks to addresses the user scanned or
+     entered; keep IoT devices on an isolated VLAN. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
