@@ -67,9 +67,18 @@ class DeviceTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(device.name,
-                        style: theme.textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis),
+                    Row(children: [
+                      Flexible(
+                        child: Text(device.name,
+                            style: theme.textTheme.titleMedium,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (device.locked)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.lock_outline, size: 16),
+                        ),
+                    ]),
                     const SizedBox(height: 2),
                     Row(children: [
                       Icon(Icons.circle, size: 8, color: dot),
@@ -88,13 +97,15 @@ class DeviceTile extends StatelessWidget {
                   Column(mainAxisSize: MainAxisSize.min, children: [
                     Switch(
                       value: s.power[k] ?? false,
-                      onChanged: (v) async {
-                        try {
-                          await store.setPower(device, k, v);
-                        } catch (e) {
-                          if (context.mounted) showError(context, e);
-                        }
-                      },
+                      onChanged: device.locked
+                          ? null
+                          : (v) async {
+                              try {
+                                await store.setPower(device, k, v);
+                              } catch (e) {
+                                if (context.mounted) showError(context, e);
+                              }
+                            },
                     ),
                     if (relays.length > 1)
                       Text(k.replaceFirst('POWER', '#'),

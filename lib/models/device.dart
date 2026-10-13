@@ -28,6 +28,7 @@ class Device {
     this.mqttTopic = '',
     this.fullTopic = '',
     this.prefixes = const ['cmnd', 'stat', 'tele'],
+    this.locked = false,
   });
 
   /// Stable id: MAC when known (survives DHCP changes), otherwise host.
@@ -48,6 +49,10 @@ class Device {
   /// cmnd / stat / tele prefixes (Prefix1..3), in that order.
   List<String> prefixes;
 
+  /// App-side switch lock: relays cannot be toggled from this app (guards
+  /// against accidental taps on e.g. a fridge or server plug).
+  bool locked;
+
   String get cmndPrefix => prefixes[0];
   String get statPrefix => prefixes[1];
   String get telePrefix => prefixes[2];
@@ -63,6 +68,7 @@ class Device {
         'mqttTopic': mqttTopic,
         'fullTopic': fullTopic,
         'prefixes': prefixes,
+        'locked': locked,
       };
 
   factory Device.fromJson(Map<String, dynamic> j) => Device(
@@ -78,6 +84,7 @@ class Device {
         prefixes: (j['prefixes'] is List && (j['prefixes'] as List).length >= 3)
             ? (j['prefixes'] as List).map((e) => '$e').toList()
             : const ['cmnd', 'stat', 'tele'],
+        locked: j['locked'] == true,
       );
 
   static String encodeList(List<Device> list) =>
@@ -141,6 +148,15 @@ class DeviceState {
   String topic = '';
   int? module;
 
+  /// One name per relay (Status.FriendlyName), used to label timer outputs.
+  List<String> friendlyNames = [];
+
+  /// Raw StatusSNS.ENERGY, kept for the energy card (TotalStartTime etc.).
+  Map<String, dynamic> energy = {};
+
+  /// Device local time from StatusTIM.Local / STATE.Time ("2026-10-13T18:51:02").
+  String deviceTime = '';
+
   bool get hasLight => dimmer != null || hsb != null || ct != null;
 
   /// Sorted relay keys so POWER1 < POWER2 < POWER10.
@@ -185,5 +201,7 @@ class DeviceState {
     }
     final up = j['Uptime'];
     if (up is String) uptime = up;
+    final t = j['Time'];
+    if (t is String && t.contains('T')) deviceTime = t;
   }
 }

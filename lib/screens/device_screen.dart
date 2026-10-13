@@ -6,6 +6,7 @@ import '../services/device_store.dart';
 import '../widgets/device_tile.dart';
 import 'console_screen.dart';
 import 'device_edit_dialog.dart';
+import 'timers_screen.dart';
 
 class DeviceScreen extends StatefulWidget {
   const DeviceScreen({super.key, required this.store, required this.deviceId});
@@ -45,6 +46,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
         await showDialog<void>(
             context: context,
             builder: (_) => EditDeviceDialog(store: store, device: d));
+      case 'timers':
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => TimersScreen(store: store, device: d)));
       case 'console':
         await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => ConsoleScreen(store: store, device: d)));
@@ -103,6 +107,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 onSelected: (a) => _menu(d, a),
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(value: 'timers', child: Text('Timers')),
                   PopupMenuItem(value: 'console', child: Text('Console')),
                   PopupMenuItem(value: 'web', child: Text('Open web UI')),
                   PopupMenuItem(value: 'restart', child: Text('Restart')),
@@ -145,7 +150,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
                               ? 'Power'
                               : 'Relay ${k.replaceFirst('POWER', '')}'),
                           value: s.power[k] ?? false,
-                          onChanged: s.online
+                          secondary:
+                              d.locked ? const Icon(Icons.lock_outline) : null,
+                          onChanged: s.online && !d.locked
                               ? (v) => store
                                       .setPower(d, k, v)
                                       .catchError((Object e) {
@@ -226,11 +233,19 @@ class _DeviceScreenState extends State<DeviceScreen> {
                     ),
                   ),
                 ],
-                if (s.sensors.isNotEmpty) ...[
+                if (s.energy.isNotEmpty) ...[
+                  _section(context, 'Energy'),
+                  _EnergyCard(
+                    energy: s.energy,
+                    onReset: (which, label) => _resetEnergy(d, which, label),
+                  ),
+                ],
+                if (s.sensors.any((r) => r.group != 'ENERGY')) ...[
                   _section(context, 'Sensors'),
                   Card(
                     child: Column(children: [
-                      for (final r in s.sensors)
+                      for (final r
+                          in s.sensors.where((r) => r.group != 'ENERGY'))
                         ListTile(
                           dense: true,
                           title: Text(r.key),
@@ -244,6 +259,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 _section(context, 'Device'),
                 Card(
                   child: Column(children: [
+                    _info('Name', d.name),
+                    _info('Device time', _formatDeviceTime(s.deviceTime)),
                     _info('Firmware', '${firmwareLabel(d.type)} ${s.version}'),
                     _info('Hardware', s.hardware),
                     _info('Address', d.host),
@@ -266,14 +283,82 @@ class _DeviceScreenState extends State<DeviceScreen> {
                             ? ''
                             : TimeOfDay.fromDateTime(s.updated!)
                                 .format(context)),
+                    SwitchListTile(
+                      title: const Text('Lock switching'),
+                      subtitle: const Text('Blocks on/off from this app'),
+                      secondary: IconButton(
+                        icon: const Icon(Icons.info_outline),
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Lock switching'),
+                            content: const Text(
+                                'While locked, this app will not switch the '
+                                'device, including room "All on/off". Use it '
+                                'for things that must stay on, like a fridge '
+                                'or a server. Timers, buttons on the device '
+                                'and other apps still work.'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('OK')),
+                            ],
+                          ),
+                        ),
+                      ),
+                      value: d.locked,
+                      onChanged: (v) => store.setLocked(d, v),
+                    ),
                   ]),
                 ),
+                _section(context, 'Device actions'),
+                FilledButton.tonalIcon(
+                  onPressed: () => _menu(d, 'timers'),
+                  icon: const Icon(Icons.timer_outlined),
+                  label: const Text('Timer configuration'),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: () => _menu(d, 'web'),
+                  icon: const Icon(Icons.settings_outlined),
+                  label: Text('${firmwareLabel(d.type)} settings'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error),
+                  onPressed: () => _menu(d, 'delete'),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete device'),
+                ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  /// "2026-10-13T18:51:02" -> "18:51" (date added when not today).
+  String _formatDeviceTime(String raw) {
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return raw;
+    final hm =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day
+        ? hm
+        : '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} $hm';
+  }
+
+  /// EnergyReset1 = today, 2 = yesterday, 3 = total (and its start date).
+  Future<void> _resetEnergy(Device d, int which, String label) async {
+    final ok = await _confirm('Reset $label?',
+        'The counter on ${d.name} is set to 0. This cannot be undone.');
+    if (!ok) return;
+    await _run(d, 'EnergyReset$which 0');
+    await store.refresh(d);
   }
 
   Widget _section(BuildContext context, String t) => Padding(
@@ -313,6 +398,80 @@ class _DeviceScreenState extends State<DeviceScreen> {
             onChanged: onChanged,
             onChangeEnd: onEnd,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EnergyCard extends StatelessWidget {
+  const _EnergyCard({required this.energy, required this.onReset});
+  final Map<String, dynamic> energy;
+  final void Function(int which, String label) onReset;
+
+  String _num(String key, int digits) {
+    final v = energy[key];
+    if (v is num) return v.toStringAsFixed(digits);
+    if (v is List && v.isNotEmpty && v.first is num) {
+      return (v.first as num).toStringAsFixed(digits);
+    }
+    return '–';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = theme.textTheme.labelMedium
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final value = theme.textTheme.titleMedium;
+    final since = '${energy['TotalStartTime'] ?? ''}'.replaceFirst('T', ' ');
+    final sinceShort = since.length >= 16 ? since.substring(0, 16) : since;
+
+    Widget cell(String l, String v) => Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [Text(l, style: label), Text(v, style: value)],
+          ),
+        );
+
+    Widget counter(String l, String key, int which, String resetLabel) =>
+        ListTile(
+          title: Text(l, style: label),
+          subtitle: Text('${_num(key, 3)} kWh', style: value),
+          trailing: OutlinedButton(
+            onPressed: () => onReset(which, resetLabel),
+            child: const Text('Reset'),
+          ),
+        );
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('${_num('Power', 1)} W',
+                style: theme.textTheme.headlineMedium
+                    ?.copyWith(color: theme.colorScheme.primary)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(children: [
+              cell('Voltage', '${_num('Voltage', 0)} V'),
+              cell('Current', '${_num('Current', 3)} A'),
+            ]),
+          ),
+          const Divider(height: 1),
+          counter('Consumption today', 'Today', 1, "today's consumption"),
+          counter('Consumption yesterday', 'Yesterday', 2,
+              "yesterday's consumption"),
+          counter(
+              sinceShort.isEmpty
+                  ? 'Total consumption'
+                  : 'Consumption since $sinceShort',
+              'Total',
+              3,
+              'total consumption'),
         ],
       ),
     );

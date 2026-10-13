@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
+import '../models/tasmota_timer.dart';
 import 'mqtt_service.dart';
 import 'tasmota_api.dart';
 
@@ -37,6 +38,7 @@ class DeviceStore extends ChangeNotifier {
   final Map<String, DeviceState> _state = {};
   final Map<String, String> _passwords = {};
   final Map<String, Completer<Map<String, dynamic>>> _pendingResult = {};
+  final _results = StreamController<(String, Map<String, dynamic>)>.broadcast();
 
   /// Devices announced on `tasmota/discovery/#`, keyed by MAC.
   final Map<String, TasmotaDiscoveryInfo> mqttDiscovered = {};
@@ -309,7 +311,50 @@ class DeviceStore extends ChangeNotifier {
         '0');
   }
 
+  /// Like [command], but over MQTT keeps collecting `RESULT` messages for
+  /// [window] and merges them: Tasmota splits long replies (e.g. `Timers`)
+  /// into several messages. Over HTTP the reply already holds everything.
+  Future<Map<String, dynamic>> commandCollect(Device d, String cmnd,
+      {Duration window = const Duration(milliseconds: 1500)}) async {
+    if (!usesMqtt(d)) return command(d, cmnd);
+    final merged = <String, dynamic>{};
+    final sub = _results.stream
+        .where((e) => e.$1 == d.id)
+        .listen((e) => merged.addAll(e.$2));
+    try {
+      await command(d, cmnd);
+      await Future<void>.delayed(window);
+    } finally {
+      await sub.cancel();
+    }
+    return merged;
+  }
+
+  Future<TimerSet> fetchTimers(Device d) async =>
+      parseTimers(await commandCollect(d, 'Timers'));
+
+  Future<void> setTimersActive(Device d, bool on) =>
+      command(d, 'Timers ${on ? 1 : 0}');
+
+  Future<TasmotaTimer> saveTimer(Device d, TasmotaTimer t) async {
+    final res = await command(d, 'Timer${t.index} ${jsonEncode(t.toJson())}');
+    return parseTimers(res).timers[t.index] ?? t;
+  }
+
+  /// `Timer<x> 0` resets the timer to its empty default.
+  Future<TasmotaTimer> clearTimer(Device d, int index) async {
+    final res = await command(d, 'Timer$index 0');
+    return parseTimers(res).timers[index] ?? TasmotaTimer(index: index);
+  }
+
+  Future<void> setLocked(Device d, bool locked) async {
+    d.locked = locked;
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> setPower(Device d, String relayKey, bool on) async {
+    if (d.locked) throw Exception('${d.name} is locked');
     final s = stateOf(d);
     final prev = s.power[relayKey];
     s.power[relayKey] = on; // optimistic
@@ -329,6 +374,7 @@ class DeviceStore extends ChangeNotifier {
       try {
         // Per-relay commands work on both Tasmota and OpenBeken
         // (Tasmota's POWER0 shortcut is not universal).
+        if (d.locked) return;
         final keys = stateOf(d).relayKeys;
         for (final k in keys.isEmpty ? ['POWER'] : keys) {
           await command(d, '$k ${on ? 'ON' : 'OFF'}');
@@ -432,12 +478,23 @@ class DeviceStore extends ChangeNotifier {
         final sns = json?['StatusSNS'];
         if (sns is Map) {
           s.sensors = flattenSensors(Map<String, dynamic>.from(sns));
+          if (sns['ENERGY'] is Map) {
+            s.energy = Map<String, dynamic>.from(sns['ENERGY'] as Map);
+          }
         }
       case 'SENSOR':
-        if (json != null) s.sensors = flattenSensors(json);
+        if (json != null) {
+          s.sensors = flattenSensors(json);
+          if (json['ENERGY'] is Map) {
+            s.energy = Map<String, dynamic>.from(json['ENERGY'] as Map);
+          }
+        }
       case 'STATE':
       case 'RESULT':
-        if (json != null) s.applyStateJson(json);
+        if (json != null) {
+          s.applyStateJson(json);
+          if (key == 'RESULT') _results.add((d.id, json));
+        }
         final c = _pendingResult.remove(d.id);
         if (c != null && !c.isCompleted) c.complete(json ?? const {});
       default:
@@ -461,6 +518,7 @@ class DeviceStore extends ChangeNotifier {
   void dispose() {
     stopPolling();
     _mqttSub.cancel();
+    _results.close();
     mqtt.removeListener(_onMqttLinkChanged);
     mqtt.dispose();
     api.close();

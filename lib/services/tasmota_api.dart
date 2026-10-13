@@ -126,7 +126,10 @@ DeviceState parseStatus0(Map<String, dynamic> j) {
 
   final status = sec('Status');
   final fn = status['FriendlyName'];
-  if (fn is List && fn.isNotEmpty) s.friendlyName = '${fn.first}';
+  if (fn is List && fn.isNotEmpty) {
+    s.friendlyName = '${fn.first}';
+    s.friendlyNames = [for (final n in fn) '${n ?? ''}'];
+  }
   if (fn is String) s.friendlyName = fn;
   s.deviceName = '${status['DeviceName'] ?? ''}';
   s.topic = '${status['Topic'] ?? ''}';
@@ -171,7 +174,14 @@ DeviceState parseStatus0(Map<String, dynamic> j) {
     s.uptime = prm['Uptime'] as String;
   }
 
-  s.sensors = flattenSensors(sec('StatusSNS'));
+  final tim = sec('StatusTIM');
+  if (tim['Local'] is String) s.deviceTime = tim['Local'] as String;
+
+  final sns = sec('StatusSNS');
+  s.sensors = flattenSensors(sns);
+  if (sns['ENERGY'] is Map) {
+    s.energy = Map<String, dynamic>.from(sns['ENERGY'] as Map);
+  }
   return s;
 }
 

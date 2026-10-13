@@ -14,6 +14,11 @@ device's `/cm?cmnd=` HTTP API.
   (temperature, humidity, power), online/offline/locked indicator and room "All on / All off".
 - **Device page**: all relays, brightness, white temperature (CT), colour hue and presets,
   every sensor from `StatusSNS` (energy, climate, etc.), firmware/hardware/IP/MAC/Wi-Fi/uptime.
+- **Timers** (Tasmota): global *Timer control active* switch and Timer1–16 cards with
+  enable, action (on/off/toggle/rule), output, time or sunrise/sunset offset, weekdays,
+  repeat and random window. Works over HTTP and MQTT.
+- **Energy card** with power, voltage, current and Reset for today / yesterday / total,
+  plus device time and an app-side **Lock switching** toggle per device.
 - **Console** for raw commands (`Backlog`, `Rule1`, `Timers`…), with pretty-printed JSON.
 - Edit name / room / address / credentials, open the device web UI, restart, remove.
 - Optional MQTT: live push updates, control through the broker, Tasmota MQTT discovery.
@@ -82,5 +87,5 @@ is pushed to GitHub.
 ## Roadmap
 
 - Home-screen widgets and quick-settings tiles
-- Timers / rules editor, firmware upgrade (`Upgrade 1`) and backup of `Status`/settings
+- Rules editor, firmware upgrade (`Upgrade 1`) and backup of `Status`/settings
 - Scenes across devices
