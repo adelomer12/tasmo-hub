@@ -229,7 +229,7 @@ class _OtaScreenState extends State<OtaScreen> {
     final out = <FwCheck>[
       const FwCheck(CheckLevel.ok, 'Device is back online'),
       FwCheck(CheckLevel.ok, 'Now running ${after.version}',
-          'was ${before.version}'),
+          before.version.isEmpty ? '' : 'was ${before.version}'),
     ];
     final want = _source?.version ?? '';
     if (want.isNotEmpty) {
