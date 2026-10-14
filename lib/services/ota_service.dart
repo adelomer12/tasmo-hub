@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -319,17 +320,17 @@ class OtaService {
     }
 
     onStep?.call('Uploading ${(payload.length / 1024).round()} KB…');
-    final req = http.MultipartRequest(
-        'POST', _url(d, '/u2', {'fsz': '${payload.length}'}))
-      ..headers.addAll(auth)
-      ..files.add(http.MultipartFile.fromBytes('u2', payload,
-          filename: fileName.split('/').last));
-    final streamed =
-        await _client.send(req).timeout(const Duration(minutes: 4));
-    final body = await streamed.stream
-        .bytesToString()
-        .timeout(const Duration(minutes: 1), onTimeout: () => '');
-    if (streamed.statusCode == 401) throw OtaException('Web password rejected');
+    final status =
+        await _postUpload(d, auth, payload, fileName.split('/').last);
+    if (status == null) {
+      // The whole file was sent but the reply was unreadable (Tasmota
+      // restarts right after answering). The version check after the
+      // restart decides whether it worked.
+      onStep?.call('Upload sent; waiting for the device…');
+      return;
+    }
+    final (code, body) = status;
+    if (code == 401) throw OtaException('Web password rejected');
     final text = body.replaceAll(RegExp(r'<[^>]+>'), ' ');
     if (RegExp(r'\bFailed\b', caseSensitive: false).hasMatch(text)) {
       final m =
@@ -337,9 +338,73 @@ class OtaService {
       throw OtaException(
           'Device rejected the file: ${m?.group(1)?.trim() ?? 'upload failed'}');
     }
-    if (streamed.statusCode != 200) {
-      throw OtaException('Upload failed (HTTP ${streamed.statusCode})');
+    if (code != 200) throw OtaException('Upload failed (HTTP $code)');
+    onStep?.call('Upload sent; waiting for the device…');
+  }
+
+  /// Multipart POST to /u2 over a raw socket with HTTP/1.0.
+  ///
+  /// Tasmota's ESP8266 web server answers HTTP/1.1 uploads with chunked
+  /// framing that strict clients reject ("Failed to parse HTTP"), and it
+  /// restarts straight after. HTTP/1.0 makes it send a plain body and close.
+  /// Returns null when the file was sent but no readable reply came back.
+  Future<(int, String)?> _postUpload(Device d, Map<String, String> auth,
+      Uint8List payload, String fileName) async {
+    final url = _url(d, '/u2', {'fsz': '${payload.length}'});
+    final boundary =
+        '----TasmoHub${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
+    final safeName = fileName.replaceAll(RegExp(r'["\r\n]'), '_');
+    final head = latin1.encode('--$boundary\r\n'
+        'Content-Disposition: form-data; name="u2"; filename="$safeName"\r\n'
+        'Content-Type: application/octet-stream\r\n\r\n');
+    final tail = latin1.encode('\r\n--$boundary--\r\n');
+    final length = head.length + payload.length + tail.length;
+    final request = StringBuffer()
+      ..write('POST ${url.path}?${url.query} HTTP/1.0\r\n')
+      ..write('Host: ${url.host}${url.hasPort ? ':${url.port}' : ''}\r\n')
+      ..write('User-Agent: TasmoHub\r\n')
+      ..write('Connection: close\r\n')
+      ..write('Content-Type: multipart/form-data; boundary=$boundary\r\n')
+      ..write('Content-Length: $length\r\n');
+    auth.forEach((k, v) => request.write('$k: $v\r\n'));
+    request.write('\r\n');
+
+    final socket = await Socket.connect(url.host, url.port,
+        timeout: const Duration(seconds: 10));
+    final reply = BytesBuilder(copy: false);
+    final done = Completer<void>();
+    socket.listen(reply.add,
+        onDone: () => done.isCompleted ? null : done.complete(),
+        onError: (_) => done.isCompleted ? null : done.complete(),
+        cancelOnError: true);
+    try {
+      socket.add(latin1.encode(request.toString()));
+      socket.add(head);
+      // Small slices keep memory flat and let a slow ESP keep up.
+      const slice = 4096;
+      for (var i = 0; i < payload.length; i += slice) {
+        socket.add(payload.sublist(i, (i + slice).clamp(0, payload.length)));
+        await socket.flush().timeout(const Duration(minutes: 2));
+      }
+      socket.add(tail);
+      await socket.flush().timeout(const Duration(minutes: 2));
+    } catch (e) {
+      socket.destroy();
+      if (reply.isNotEmpty) return _parseReply(reply.takeBytes());
+      throw OtaException('Upload interrupted: $e');
     }
+    await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
+    socket.destroy();
+    return _parseReply(reply.takeBytes());
+  }
+
+  static (int, String)? _parseReply(Uint8List bytes) {
+    if (bytes.isEmpty) return null;
+    final text = latin1.decode(bytes, allowInvalid: true);
+    final m = RegExp(r'^HTTP/1\.[01] (\d{3})').firstMatch(text);
+    if (m == null) return null;
+    final split = text.indexOf('\r\n\r\n');
+    return (int.parse(m[1]!), split < 0 ? '' : text.substring(split + 4));
   }
 
   /// OpenBeken: raw body to /api/ota, then /api/reboot.

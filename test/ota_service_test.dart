@@ -18,6 +18,7 @@ class FakeDevice {
   /// Answers for /u4 in order; the last one repeats.
   List<String> u4Answers = ['none'];
   bool failUpload = false;
+  bool garbleReply = false;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -45,6 +46,14 @@ class FakeDevice {
         final parts = await MimeLite.parse(body.toBytes(), boundary);
         received = parts.$2;
         receivedName = parts.$1;
+        if (garbleReply) {
+          // Like the ESP8266 web server: broken framing, then it restarts.
+          final s = await req.response.detachSocket(writeHeaders: false);
+          s.add(latin1.encode('HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked'
+              '\r\n\r\n5\r\nbad chunk sizes'));
+          await s.close();
+          return;
+        }
         res.write(failUpload
             ? '<b>Upload <font>Failed</font></b><br><br>Not enough space'
             : '<b>Upload <font>Successful</font></b>');
@@ -117,6 +126,16 @@ void main() {
             .flashTasmota(d, null, payload, 'tasmota.bin', esp32: false),
         throwsA(isA<OtaException>().having(
             (e) => e.message, 'message', contains('Not enough space'))));
+  });
+
+  test('unreadable reply after a full upload is not an error', () async {
+    dev.garbleReply = true;
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    final steps = <String>[];
+    await OtaService().flashTasmota(d, null, payload, 'tasmota-minimal.bin.gz',
+        esp32: false, onStep: steps.add);
+    expect(dev.received, payload);
+    expect(steps.last, 'Upload sent; waiting for the device…');
   });
 
   test('OpenBeken: raw body to /api/ota then reboot', () async {

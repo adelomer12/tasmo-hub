@@ -67,12 +67,30 @@ class FwTarget {
     return 0; // plain ESP32 (D0WD, PICO, U4WDH...)
   }
 
-  /// Tasmota build variant from the version, e.g. "tasmota32c3".
-  String get tasmotaVariant {
+  /// Build name inside the version brackets, e.g. "tasmota", "sensors",
+  /// "minimal", "tasmota32c3" (Tasmota's CODE_IMAGE_STR).
+  String get codeImage {
     final m = RegExp(r'\(([^)]+)\)').firstMatch(version);
-    if (m == null) return isEsp32 ? 'tasmota32' : 'tasmota';
-    return m[1]!.replaceFirst('release-', '');
+    return m == null ? '' : m[1]!.replaceFirst('release-', '');
   }
+
+  /// Release file base name for this device, e.g. "tasmota-sensors" or
+  /// "tasmota32c3". Minimal and safeboot are stepping stones, so they map
+  /// back to the standard build for the chip.
+  String get tasmotaVariant {
+    final base =
+        isEsp32 ? 'tasmota32${_chipSuffix[esp32ChipId] ?? ''}' : 'tasmota';
+    final c = codeImage.toLowerCase();
+    if (c.isEmpty || const {'minimal', 'mini-custom', 'safeboot'}.contains(c)) {
+      return base;
+    }
+    if (c.startsWith('tasmota')) return c;
+    return '${isEsp32 ? 'tasmota32' : 'tasmota'}-$c';
+  }
+
+  /// True while running a minimal or safeboot build.
+  bool get isStepStone => const {'minimal', 'mini-custom', 'safeboot'}
+      .contains(codeImage.toLowerCase());
 
   /// Tasmota version number without the variant, e.g. "15.0.1".
   String get versionNumber {
@@ -101,6 +119,16 @@ const _chipIds = {
   '-P4': 18,
   '-C61': 20,
   '-C5': 23,
+};
+
+const _chipSuffix = {
+  2: 's2',
+  5: 'c3',
+  9: 's3',
+  12: 'c2',
+  13: 'c6',
+  18: 'p4',
+  23: 'c5',
 };
 
 String chipName(int id) => switch (id) {

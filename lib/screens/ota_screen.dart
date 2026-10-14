@@ -293,6 +293,15 @@ class _OtaScreenState extends State<OtaScreen> {
                           const SizedBox(height: 4),
                           Text(t.version.isEmpty ? 'Unknown' : t.version,
                               style: theme.textTheme.titleMedium),
+                          if (t.isStepStone)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                  'This is a temporary ${t.codeImage} build. '
+                                  'Flash the full ${t.tasmotaVariant} build now.',
+                                  style: TextStyle(
+                                      color: theme.colorScheme.tertiary)),
+                            ),
                           Text([
                             if (t.hardware.isNotEmpty) t.hardware,
                             if (t.freeSketchKb != null)

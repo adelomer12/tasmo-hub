@@ -46,6 +46,24 @@ void main() {
       expect(obkOtaSuffix(obk.obkPlatform), '.rbl');
     });
 
+    test('release file names from the running build', () {
+      FwTarget t(String hw, String v) =>
+          FwTarget(type: FirmwareType.tasmota, hardware: hw, version: v);
+      expect(
+          t('ESP8285N08', '15.6.0(release-minimal)').tasmotaVariant, 'tasmota');
+      expect(t('ESP8285N08', '15.6.0(release-minimal)').isStepStone, isTrue);
+      expect(t('ESP8266EX', '14.2.0(release-sensors)').tasmotaVariant,
+          'tasmota-sensors');
+      expect(
+          t('ESP8266EX', '14.2.0(release-tasmota)').tasmotaVariant, 'tasmota');
+      expect(t('ESP32-C3', '15.6.0(release-safeboot)').tasmotaVariant,
+          'tasmota32c3');
+      expect(t('ESP32-D0WD-V3', '15.6.0(release-bluetooth)').tasmotaVariant,
+          'tasmota32-bluetooth');
+      expect(t('ESP32-S3', '15.6.0(release-tasmota32s3)').tasmotaVariant,
+          'tasmota32s3');
+    });
+
     test('digest normalising', () {
       final h = 'a' * 64;
       expect(normalizeDigest('sha256:$h'), h);
