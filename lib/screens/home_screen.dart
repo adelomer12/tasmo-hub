@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      store.mqtt.ensureConnected();
       store.startPolling();
     } else if (state == AppLifecycleState.paused) {
       store.stopPolling();

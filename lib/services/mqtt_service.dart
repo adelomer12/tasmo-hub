@@ -152,11 +152,21 @@ class MqttService extends ChangeNotifier {
   MqttLinkState state = MqttLinkState.disabled;
   String? lastError;
 
+  /// Bumped on every connect(); a connect that finishes after a newer one
+  /// started throws its own client away instead of touching shared state.
+  int _generation = 0;
+  MqttSettings? _settings;
+  Timer? _watchdog;
+  int _deadTicks = 0;
+
   Stream<MqttIncoming> get messages => _incoming.stream;
   bool get isConnected => state == MqttLinkState.connected;
 
   Future<void> connect(MqttSettings s) async {
+    final gen = ++_generation;
+    _settings = s;
     await disconnect();
+    if (gen != _generation) return;
     if (!s.enabled || s.host.trim().isEmpty) {
       state = MqttLinkState.disabled;
       notifyListeners();
@@ -183,12 +193,14 @@ class MqttService extends ChangeNotifier {
     c.connectionMessage =
         MqttConnectMessage().withClientIdentifier(s.clientId).startClean();
     c.onDisconnected = () {
+      if (_client != c) return; // a replaced client closing
       if (state == MqttLinkState.connected) {
         state = MqttLinkState.connecting; // auto-reconnect in progress
         notifyListeners();
       }
     };
     c.onAutoReconnected = () {
+      if (_client != c) return;
       state = MqttLinkState.connected;
       notifyListeners();
     };
@@ -200,6 +212,14 @@ class MqttService extends ChangeNotifier {
       lastError = describeConnectError(
           e, c.connectionStatus?.returnCode, s.host.trim(), s.port,
           hasCredentials: s.username.isNotEmpty);
+    }
+    if (gen != _generation || _client != c) {
+      // Superseded while connecting (e.g. Save tapped twice).
+      c.autoReconnect = false;
+      try {
+        c.disconnect();
+      } catch (_) {}
+      return;
     }
     if (c.connectionStatus?.state != MqttConnectionState.connected) {
       lastError ??= describeConnectError(
@@ -222,7 +242,55 @@ class MqttService extends ChangeNotifier {
       }
     });
     state = MqttLinkState.connected;
+    _startWatchdog();
     notifyListeners();
+  }
+
+  /// Keeps the status icon honest: compares our state with the socket's
+  /// real state, and reconnects if the link stayed dead (Android often cuts
+  /// sockets of backgrounded apps without a clean callback).
+  void _startWatchdog() {
+    _watchdog?.cancel();
+    _deadTicks = 0;
+    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) => checkLink());
+  }
+
+  bool get _socketUp =>
+      _client?.connectionStatus?.state == MqttConnectionState.connected;
+
+  /// Re-evaluates the link now. Also called when the app returns to the
+  /// foreground.
+  void checkLink() {
+    final s = _settings;
+    if (s == null || !s.enabled || _client == null) return;
+    if (_socketUp) {
+      _deadTicks = 0;
+      if (state != MqttLinkState.connected) {
+        state = MqttLinkState.connected;
+        notifyListeners();
+      }
+      return;
+    }
+    if (state == MqttLinkState.connected) {
+      state = MqttLinkState.connecting;
+      notifyListeners();
+    }
+    // autoReconnect gets ~15 s; after that start a fresh session.
+    if (++_deadTicks >= 3) connect(s);
+  }
+
+  /// Called on app resume: reconnect at once if the link is gone.
+  void ensureConnected() {
+    final s = _settings;
+    if (s == null || !s.enabled) return;
+    if (_client == null && state != MqttLinkState.connecting) {
+      if (state != MqttLinkState.error) connect(s);
+      return;
+    }
+    if (!_socketUp) {
+      _deadTicks = 2; // next check reconnects
+      checkLink();
+    }
   }
 
   /// Makes the subscription set equal to [filters].
@@ -249,6 +317,8 @@ class MqttService extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _watchdog?.cancel();
+    _watchdog = null;
     await _sub?.cancel();
     _sub = null;
     _subscribed.clear();
@@ -265,6 +335,7 @@ class MqttService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _generation++;
     disconnect();
     _incoming.close();
     super.dispose();
