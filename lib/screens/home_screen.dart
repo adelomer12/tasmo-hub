@@ -7,6 +7,7 @@ import 'device_edit_dialog.dart';
 import 'device_screen.dart';
 import 'discovery_screen.dart';
 import 'mqtt_settings_screen.dart';
+import 'scenes_screen.dart';
 import '../services/mqtt_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -53,6 +54,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openMqtt() => Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => MqttSettingsScreen(store: store)));
+
+  Future<void> _openScenes() => Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => ScenesScreen(store: store)));
 
   Future<void> _addManual() async {
     await showDialog<void>(
@@ -111,8 +115,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (v == 'add') _addManual();
                   if (v == 'settings') _settings();
                   if (v == 'mqtt') _openMqtt();
+                  if (v == 'scenes') _openScenes();
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'scenes', child: Text('Scenes')),
                   PopupMenuItem(value: 'add', child: Text('Add by IP')),
                   PopupMenuItem(value: 'mqtt', child: Text('MQTT broker')),
                   PopupMenuItem(
@@ -133,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
                     children: [
+                      _SceneBar(store: store, onManage: _openScenes),
                       for (final room in store.rooms) ...[
                         _RoomHeader(store: store, room: room),
                         for (final d
@@ -153,6 +160,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _openDevice(Device d) => Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => DeviceScreen(store: store, deviceId: d.id)));
+}
+
+/// One-tap scene chips; long-press or the gear opens the scene list.
+class _SceneBar extends StatelessWidget {
+  const _SceneBar({required this.store, required this.onManage});
+  final DeviceStore store;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final scenes = store.scenes;
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final s in scenes)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onLongPress: onManage,
+                child: ActionChip(
+                  avatar: const Icon(Icons.auto_awesome, size: 18),
+                  label: Text(s.name),
+                  onPressed: () => runSceneWithFeedback(context, store, s),
+                ),
+              ),
+            ),
+          ActionChip(
+            avatar: Icon(scenes.isEmpty ? Icons.add : Icons.tune, size: 18),
+            label: Text(scenes.isEmpty ? 'Add a scene' : 'Scenes'),
+            onPressed: onManage,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RoomHeader extends StatelessWidget {

@@ -23,6 +23,8 @@ device's `/cm?cmnd=` HTTP API.
   (*TasmoHub 1–3*), each bound to one device output via a picker. They toggle over local
   HTTP without starting the app; passwords for them are encrypted with an Android
   Keystore key. Long-press a tile or reconfigure a widget to change its device.
+- **Rules editor** for Tasmota Rule1-3: enable, Once, Stop-on-error, one trigger per line, example snippets.
+- **Scenes**: named groups of commands across devices (relay on/off/toggle, dimmer, CT, colour or any command), run from chips on the home screen; capture a device's current state as steps.
 - **Console** for raw commands (`Backlog`, `Rule1`, `Timers`…), with pretty-printed JSON.
 - Edit name / room / address / credentials, open the device web UI, restart, remove.
 - Optional MQTT: live push updates, control through the broker, Tasmota MQTT discovery.
@@ -90,5 +92,5 @@ is pushed to GitHub.
 
 ## Roadmap
 
-- Rules editor, firmware upgrade (`Upgrade 1`) and backup of `Status`/settings
-- Scenes across devices
+- OTA firmware upgrade from the app
+- iOS widgets

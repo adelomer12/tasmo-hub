@@ -6,6 +6,7 @@ import '../services/device_store.dart';
 import '../widgets/device_tile.dart';
 import 'console_screen.dart';
 import 'device_edit_dialog.dart';
+import 'rules_screen.dart';
 import 'timers_screen.dart';
 
 class DeviceScreen extends StatefulWidget {
@@ -49,6 +50,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
       case 'timers':
         await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => TimersScreen(store: store, device: d)));
+      case 'rules':
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => RulesScreen(store: store, device: d)));
       case 'console':
         await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => ConsoleScreen(store: store, device: d)));
@@ -108,6 +112,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
                   PopupMenuItem(value: 'timers', child: Text('Timers')),
+                  PopupMenuItem(value: 'rules', child: Text('Rules')),
                   PopupMenuItem(value: 'console', child: Text('Console')),
                   PopupMenuItem(value: 'web', child: Text('Open web UI')),
                   PopupMenuItem(value: 'restart', child: Text('Restart')),

@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
+import '../models/scene.dart';
+import '../models/tasmota_rule.dart';
 import '../models/tasmota_timer.dart';
 import 'mqtt_service.dart';
 import 'native_bridge.dart';
@@ -28,6 +30,7 @@ class DeviceStore extends ChangeNotifier {
   static const _prefsKey = 'devices_v1';
   static const _pwPrefix = 'pw_';
   static const _pollKey = 'poll_seconds';
+  static const _scenesKey = 'scenes_v1';
   static const discoveryFilter = 'tasmota/discovery/+/config';
 
   final TasmotaApi api;
@@ -36,6 +39,7 @@ class DeviceStore extends ChangeNotifier {
   late final StreamSubscription<MqttIncoming> _mqttSub;
 
   final List<Device> _devices = [];
+  final List<Scene> _scenes = [];
   final Map<String, DeviceState> _state = {};
   final Map<String, String> _passwords = {};
   final Map<String, Completer<Map<String, dynamic>>> _pendingResult = {};
@@ -104,6 +108,14 @@ class DeviceStore extends ChangeNotifier {
         _devices
           ..clear()
           ..addAll(Device.decodeList(raw));
+      } catch (_) {}
+    }
+    final rawScenes = prefs.getString(_scenesKey);
+    if (rawScenes != null) {
+      try {
+        _scenes
+          ..clear()
+          ..addAll(Scene.decodeList(rawScenes));
       } catch (_) {}
     }
     for (final d in _devices) {
@@ -210,6 +222,13 @@ class DeviceStore extends ChangeNotifier {
 
   Future<void> remove(Device d) async {
     _devices.removeWhere((e) => e.id == d.id);
+    var scenesChanged = false;
+    for (final sc in _scenes) {
+      final before = sc.actions.length;
+      sc.actions.removeWhere((a) => a.deviceId == d.id);
+      scenesChanged |= sc.actions.length != before;
+    }
+    if (scenesChanged) await _saveScenes();
     _state.remove(d.id);
     _passwords.remove(d.id);
     await _secure.delete(key: '$_pwPrefix${d.id}');
@@ -364,6 +383,112 @@ class DeviceStore extends ChangeNotifier {
   Future<TasmotaTimer> clearTimer(Device d, int index) async {
     final res = await command(d, 'Timer$index 0');
     return parseTimers(res).timers[index] ?? TasmotaTimer(index: index);
+  }
+
+  // ---- rules ------------------------------------------------------------
+
+  Future<TasmotaRule> fetchRule(Device d, int index) async {
+    final res = await commandCollect(d, 'Rule$index',
+        window: const Duration(milliseconds: 600));
+    return parseRule(index, res) ??
+        (throw Exception('Device did not return Rule$index'));
+  }
+
+  /// Writes the text, then the flags, and returns what the device now holds.
+  Future<TasmotaRule> saveRule(Device d, TasmotaRule r) async {
+    await command(d, r.setTextCommand);
+    await command(d, r.onceCommand(r.once));
+    await command(d, r.stopOnErrorCommand(r.stopOnError));
+    await command(d, r.enableCommand(r.enabled));
+    return fetchRule(d, r.index);
+  }
+
+  Future<TasmotaRule> setRuleEnabled(Device d, TasmotaRule r, bool on) async {
+    final res = await command(d, r.enableCommand(on));
+    return parseRule(r.index, res) ?? (r..enabled = on);
+  }
+
+  // ---- scenes -----------------------------------------------------------
+
+  List<Scene> get scenes => List.unmodifiable(_scenes);
+
+  Future<void> _saveScenes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_scenesKey, Scene.encodeList(_scenes));
+  }
+
+  Future<void> upsertScene(Scene s) async {
+    final i = _scenes.indexWhere((e) => e.id == s.id);
+    if (i >= 0) {
+      _scenes[i] = s;
+    } else {
+      _scenes.add(s);
+    }
+    await _saveScenes();
+    notifyListeners();
+  }
+
+  Future<void> removeScene(Scene s) async {
+    _scenes.removeWhere((e) => e.id == s.id);
+    await _saveScenes();
+    notifyListeners();
+  }
+
+  /// [to] is the final index (already adjusted for the removed item).
+  Future<void> reorderScenes(int from, int to) async {
+    _scenes.insert(to, _scenes.removeAt(from));
+    await _saveScenes();
+    notifyListeners();
+  }
+
+  /// One command per relay (current on/off) plus light level/colour, so a
+  /// scene can be built by setting devices up by hand and capturing them.
+  List<SceneAction> captureState(Device d) {
+    final s = stateOf(d);
+    return [
+      for (final k in s.relayKeys)
+        SceneAction(
+            deviceId: d.id, command: '$k ${s.power[k]! ? 'ON' : 'OFF'}'),
+      if (s.dimmer != null && s.anyOn)
+        SceneAction(deviceId: d.id, command: 'Dimmer ${s.dimmer}'),
+      if (s.ct != null && s.anyOn)
+        SceneAction(deviceId: d.id, command: 'CT ${s.ct}'),
+    ];
+  }
+
+  /// Devices run in parallel; each device's steps run in order so a radio
+  /// only sees one request at a time. Relay steps skip locked devices.
+  Future<SceneRunResult> runScene(Scene scene) async {
+    final result = SceneRunResult();
+    final byDevice = <String, List<SceneAction>>{};
+    for (final a in scene.actions) {
+      byDevice.putIfAbsent(a.deviceId, () => []).add(a);
+    }
+    await Future.wait(byDevice.entries.map((e) async {
+      final d = byId(e.key);
+      for (final a in e.value) {
+        if (d == null) {
+          result.failed.add('Removed device: ${a.command}');
+          continue;
+        }
+        if (d.locked && a.isPower) {
+          result.skipped.add('${d.name}: ${a.command}');
+          continue;
+        }
+        try {
+          await command(d, a.command);
+          result.ok++;
+        } catch (err) {
+          result.failed.add('${d.name}: $err');
+        }
+      }
+    }));
+    await Future.wait(byDevice.keys
+        .map(byId)
+        .whereType<Device>()
+        .where((d) => !usesMqtt(d))
+        .map(refresh));
+    return result;
   }
 
   Future<void> setLocked(Device d, bool locked) async {
