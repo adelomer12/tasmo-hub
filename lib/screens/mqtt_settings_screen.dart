@@ -23,6 +23,7 @@ class _MqttSettingsScreenState extends State<MqttSettingsScreen> {
   late bool _selfSigned = _s.allowSelfSigned;
   late bool _prefer = _s.preferMqtt;
   bool _saving = false;
+  bool _showPw = false;
 
   @override
   void dispose() {
@@ -114,12 +115,28 @@ class _MqttSettingsScreenState extends State<MqttSettingsScreen> {
                 ),
               TextField(
                 controller: _user,
+                autocorrect: false,
+                enableSuggestions: false,
                 decoration: const InputDecoration(labelText: 'Username'),
               ),
               TextField(
                 controller: _pw,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: !_showPw,
+                autocorrect: false,
+                enableSuggestions: false,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  helperText: _pw.text != _pw.text.trim()
+                      ? 'Note: the password starts or ends with a space'
+                      : null,
+                  suffixIcon: IconButton(
+                    tooltip: _showPw ? 'Hide password' : 'Show password',
+                    icon:
+                        Icon(_showPw ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _showPw = !_showPw),
+                  ),
+                ),
               ),
               TextField(
                 controller: _clientId,

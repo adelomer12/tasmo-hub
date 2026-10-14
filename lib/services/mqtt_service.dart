@@ -166,7 +166,10 @@ class MqttService extends ChangeNotifier {
     lastError = null;
     notifyListeners();
 
-    final c = MqttServerClient.withPort(s.host.trim(), s.clientId, s.port)
+    // One attempt: retrying a rejected login only fills the broker log.
+    // autoReconnect still handles drops after a successful connect.
+    final c = MqttServerClient.withPort(s.host.trim(), s.clientId, s.port,
+        maxConnectionAttempts: 1)
       ..logging(on: false)
       ..keepAlivePeriod = 30
       ..connectTimeoutPeriod = 5000
@@ -194,10 +197,14 @@ class MqttService extends ChangeNotifier {
       await c.connect(s.username.isEmpty ? null : s.username,
           s.password.isEmpty ? null : s.password);
     } catch (e) {
-      lastError = '$e';
+      lastError = describeConnectError(
+          e, c.connectionStatus?.returnCode, s.host.trim(), s.port,
+          hasCredentials: s.username.isNotEmpty);
     }
     if (c.connectionStatus?.state != MqttConnectionState.connected) {
-      lastError ??= 'Broker refused: ${c.connectionStatus?.returnCode}';
+      lastError ??= describeConnectError(
+          null, c.connectionStatus?.returnCode, s.host.trim(), s.port,
+          hasCredentials: s.username.isNotEmpty);
       state = MqttLinkState.error;
       c.autoReconnect = false;
       c.disconnect();
@@ -262,6 +269,45 @@ class MqttService extends ChangeNotifier {
     _incoming.close();
     super.dispose();
   }
+}
+
+/// Turns mqtt_client's exceptions and CONNACK codes into something a person
+/// can act on.
+String describeConnectError(
+    Object? error, MqttConnectReturnCode? code, String host, int port,
+    {required bool hasCredentials}) {
+  switch (code) {
+    case MqttConnectReturnCode.notAuthorized:
+    case MqttConnectReturnCode.badUsernameOrPassword:
+      return hasCredentials
+          ? 'The broker rejected the username or password. Check them, and '
+              'that this user exists on the broker (for Mosquitto: '
+              'password_file / acl_file).'
+          : 'The broker requires a username and password.';
+    case MqttConnectReturnCode.identifierRejected:
+      return 'The broker rejected the client ID. Try a shorter one without '
+          'special characters.';
+    case MqttConnectReturnCode.unacceptedProtocolVersion:
+      return 'The broker does not accept MQTT 3.1.1.';
+    case MqttConnectReturnCode.brokerUnavailable:
+      return 'The broker says it is unavailable right now.';
+    default:
+      break;
+  }
+  final e = '$error';
+  if (e.contains('HandshakeException') || e.contains('CERTIFICATE')) {
+    return 'TLS handshake failed. Check the port (8883 for TLS) and the '
+        "broker's certificate.";
+  }
+  if (e.contains('SocketException') ||
+      e.contains('Connection refused') ||
+      e.contains('timed out') ||
+      e.contains('No route')) {
+    return 'Cannot reach $host:$port. Check the address and port, and that '
+        'the firewall allows this phone to reach the broker.';
+  }
+  if (error == null) return 'Could not connect to $host:$port.';
+  return 'Could not connect to $host:$port ($e).';
 }
 
 /// Parsed `tasmota/discovery/<MAC>/config` payload (Tasmota native discovery,

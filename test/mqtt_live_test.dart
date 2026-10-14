@@ -72,6 +72,7 @@ void main() {
         username: 'hub',
         password: 'wrong'));
     expect(m.state, MqttLinkState.error);
+    expect(m.lastError, contains('rejected the username or password'));
     await m.disconnect();
   }, skip: _port == null);
 
