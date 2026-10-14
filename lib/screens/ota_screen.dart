@@ -201,12 +201,35 @@ class _OtaScreenState extends State<OtaScreen> {
               esp32: before.isEsp32, onStep: _setStep);
         }
         _setStep('Waiting for the device to restart…');
-        final after = await _ota.waitForDevice(d, _pw,
+        var after = await _ota.waitForDevice(d, _pw,
             hardwareHint: before.hardware, onStep: _setStep);
+        if (!_isObk && before.isEsp32 && _inSafeboot(after)) {
+          after = await _leaveSafeboot(before, r);
+        }
         _target = after;
         _after = _postChecks(before, after, r);
         await widget.store.refresh(d);
       });
+
+  static bool _inSafeboot(FwTarget t) =>
+      t.version.toLowerCase().contains('safeboot');
+
+  /// ESP32 came back in safeboot: the image may already be written but the
+  /// restart never happened, or the upload did not take. Restart first, then
+  /// upload once more from safeboot.
+  Future<FwTarget> _leaveSafeboot(FwTarget before, FirmwareReport r) async {
+    _setStep('Still in safeboot; restarting it…');
+    await _ota.restart(d, _pw);
+    var t = await _ota.waitForDevice(d, _pw,
+        hardwareHint: before.hardware, onStep: _setStep);
+    if (!_inSafeboot(t)) return t;
+    await _ota.flashTasmota(d, _pw, r.payload, r.uploadName,
+        esp32: true, onStep: (s) => _setStep('Retry from safeboot: $s'));
+    _setStep('Waiting for the device to restart…');
+    t = await _ota.waitForDevice(d, _pw,
+        hardwareHint: before.hardware, onStep: _setStep);
+    return t;
+  }
 
   Future<void> _flashMinimalFirst(FwTarget t) async {
     final src = _ota.tasmotaMinimal();

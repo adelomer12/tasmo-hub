@@ -13,6 +13,7 @@ class FakeDevice {
   Uint8List? received;
   String? receivedName;
   String? auth;
+  final referers = <String?>[];
   int u4Calls = 0;
 
   /// Answers for /u4 in order; the last one repeats.
@@ -31,6 +32,7 @@ class FakeDevice {
   Future<void> _handle(HttpRequest req) async {
     log.add('${req.method} ${req.uri}');
     auth = req.headers.value('authorization');
+    referers.add(req.headers.value('referer'));
     final res = req.response;
     switch (req.uri.path) {
       case '/u4':
@@ -127,6 +129,19 @@ void main() {
     expect(dev.received, payload);
     expect(dev.auth, isNull);
   }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('Tasmota requests carry a same-device Referer', () async {
+    dev.u4Answers = ['true'];
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    await OtaService()
+        .flashTasmota(d, 'pw', payload, 'tasmota32.bin', esp32: true);
+    await OtaService().restart(d, 'pw');
+    expect(dev.log.map((l) => l.split('?').first).toList(),
+        ['GET /u4', 'GET /up', 'POST /u2', 'GET /cm']);
+    // Tasmota checks that the Referer starts with http://<its address>.
+    expect(dev.referers, everyElement('http://${dev.host}/up'));
+    expect(dev.log.last, contains('Restart'));
+  });
 
   test('Tasmota failure page becomes an error', () async {
     dev.failUpload = true;

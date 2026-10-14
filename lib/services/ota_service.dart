@@ -279,10 +279,16 @@ class OtaService {
 
   // ---- flashing -----------------------------------------------------------
 
+  /// Basic auth plus the Referer a browser would send: Tasmota's
+  /// privileged pages (/u4, /up, /u2) drop requests whose Referer is not the
+  /// device itself unless SetOption128 allows API access, and /u2 then
+  /// writes the image but never answers or restarts.
   Map<String, String> _auth(Device d, String? password) {
-    if (password == null || password.isEmpty) return {};
+    final headers = {'Referer': 'http://${d.host}/up'};
+    if (password == null || password.isEmpty) return headers;
     final user = d.username.isEmpty ? 'admin' : d.username;
     return {
+      ...headers,
       'Authorization': 'Basic ${base64Encode(utf8.encode('$user:$password'))}',
     };
   }
@@ -333,7 +339,12 @@ class OtaService {
         } catch (_) {
           answer = null; // restarting
         }
-        if (answer == 'none' || answer == 'true') break;
+        if (answer == 'none') break;
+        if (answer == 'true') {
+          // Same pause the device's own upload page makes.
+          await Future<void>.delayed(const Duration(seconds: 1));
+          break;
+        }
         onStep?.call('Restarting into safeboot mode…');
         await Future<void>.delayed(
             Duration(seconds: answer == 'false' ? 6 : 2));
@@ -460,6 +471,17 @@ class OtaService {
     } catch (_) {
       // It may drop the connection while rebooting.
     }
+  }
+
+  /// Asks a Tasmota device to restart (used to leave safeboot once the new
+  /// image is in place). Errors are ignored: it drops the connection.
+  Future<void> restart(Device d, String? password) async {
+    try {
+      await _client
+          .get(_url(d, '/cm', {'cmnd': 'Restart 1'}),
+              headers: _auth(d, password))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 
   /// Waits for the device to answer again and returns its firmware version.
