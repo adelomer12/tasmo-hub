@@ -25,7 +25,25 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
+      - name: Fetch real firmware images for the verification tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/fw"
+          base=https://raw.githubusercontent.com/arendst/Tasmota-firmware/firmware/release-firmware
+          for f in tasmota/tasmota.bin tasmota/tasmota.bin.gz tasmota/tasmota-minimal.bin.gz \
+                   tasmota32/tasmota32.bin tasmota32/tasmota32c3.bin tasmota32/tasmota32.factory.bin; do
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/fw/$(basename $f)" "$base/$f"
+          done
+          ls -l "$RUNNER_TEMP/fw"
+          # Release metadata the app relies on (asset names and SHA-256 digests).
+          for r in arendst/Tasmota openshwprojects/OpenBK7231T_App; do
+            curl -fsSL -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              "https://api.github.com/repos/$r/releases/latest" |
+              jq -r '"\(.tag_name) assets=\(.assets|length)", (.assets[] | select(.name|test("^(tasmota(32)?\\.bin|OpenBK7231N_.*\\.rbl)")) | "\(.name) \(.digest)")' || true
+          done
       - run: flutter test
+        env:
+          FIRMWARE_SAMPLES: ${{ runner.temp }}/fw
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:

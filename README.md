@@ -25,6 +25,7 @@ device's `/cm?cmnd=` HTTP API.
   Keystore key. Long-press a tile or reconfigure a widget to change its device.
 - **Rules editor** for Tasmota Rule1-3: enable, Once, Stop-on-error, one trigger per line, example snippets.
 - **Scenes**: named groups of commands across devices (relay on/off/toggle, dimmer, CT, colour or any command), run from chips on the home screen; capture a device's current state as steps.
+- **Firmware update (OTA) with verification**: download the latest official release for the device's chip and build variant (HTTPS only), or pick a file. Before anything is sent the app checks the file: gzip CRC, ESP image checksums, ESP32 chip ID, the SHA-256 built into ESP32 images, factory/bootloader images rejected, free program space (ESP8266 flashes the minimal build first when needed), and the SHA-256 against the GitHub release digest or one you paste. After the upload it waits for the device and confirms the version it now runs. OpenBeken: platform-matched OTA file (`.rbl` etc.) via `/api/ota`.
 - **Console** for raw commands (`Backlog`, `Rule1`, `Timers`…), with pretty-printed JSON.
 - Edit name / room / address / credentials, open the device web UI, restart, remove.
 - Optional MQTT: live push updates, control through the broker, Tasmota MQTT discovery.
@@ -92,5 +93,4 @@ is pushed to GitHub.
 
 ## Roadmap
 
-- OTA firmware upgrade from the app
 - iOS widgets
