@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">TasmoHub switch</string>
+    <string name="widget_description">Toggle one Tasmota or OpenBeken output</string>
+    <string name="widget_pick">Tap to choose a device</string>
+    <string name="tile_label_1">TasmoHub 1</string>
+    <string name="tile_label_2">TasmoHub 2</string>
+    <string name="tile_label_3">TasmoHub 3</string>
+    <string name="tile_pick">TasmoHub</string>
+    <string name="tile_pick_hint">Tap to choose</string>
+    <string name="picker_title">Choose a device</string>
+    <string name="picker_empty">No devices yet. Open TasmoHub and add your devices first.</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="state_locked">Locked</string>
+    <string name="state_unknown">Unreachable</string>
+</resources>

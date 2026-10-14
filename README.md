@@ -19,6 +19,10 @@ device's `/cm?cmnd=` HTTP API.
   repeat and random window. Works over HTTP and MQTT.
 - **Energy card** with power, voltage, current and Reset for today / yesterday / total,
   plus device time and an app-side **Lock switching** toggle per device.
+- **Android widgets and Quick Settings tiles**: a 1x1 resizable widget and three tiles
+  (*TasmoHub 1–3*), each bound to one device output via a picker. They toggle over local
+  HTTP without starting the app; passwords for them are encrypted with an Android
+  Keystore key. Long-press a tile or reconfigure a widget to change its device.
 - **Console** for raw commands (`Backlog`, `Rule1`, `Timers`…), with pretty-printed JSON.
 - Edit name / room / address / credentials, open the device web UI, restart, remove.
 - Optional MQTT: live push updates, control through the broker, Tasmota MQTT discovery.
@@ -86,6 +90,5 @@ is pushed to GitHub.
 
 ## Roadmap
 
-- Home-screen widgets and quick-settings tiles
 - Rules editor, firmware upgrade (`Upgrade 1`) and backup of `Status`/settings
 - Scenes across devices

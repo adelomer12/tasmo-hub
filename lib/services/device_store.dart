@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/device.dart';
 import '../models/tasmota_timer.dart';
 import 'mqtt_service.dart';
+import 'native_bridge.dart';
 import 'tasmota_api.dart';
 
 /// Owns the device list, credentials and live state, and keeps state fresh
@@ -48,6 +49,23 @@ class DeviceStore extends ChangeNotifier {
   Timer? _timer;
   bool _refreshing = false;
   int pollSeconds = 10;
+
+  Timer? _nativeSync;
+
+  /// Every UI change also refreshes the widget/tile copy (debounced; the
+  /// bridge skips the call when nothing relevant changed).
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    _nativeSync?.cancel();
+    _nativeSync = Timer(const Duration(milliseconds: 800), () {
+      NativeBridge.syncDevices(
+        _devices,
+        {for (final d in _devices) d.id: stateOf(d).relayKeys},
+        Map.of(_passwords),
+      );
+    });
+  }
 
   List<Device> get devices => List.unmodifiable(_devices);
   DeviceState stateOf(Device d) => _state[d.id] ??= DeviceState();
@@ -187,6 +205,7 @@ class DeviceStore extends ChangeNotifier {
       _passwords[d.id] = password;
       await _secure.write(key: '$_pwPrefix${d.id}', value: password);
     }
+    notifyListeners();
   }
 
   Future<void> remove(Device d) async {
@@ -516,6 +535,7 @@ class DeviceStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    _nativeSync?.cancel();
     stopPolling();
     _mqttSub.cancel();
     _results.close();
