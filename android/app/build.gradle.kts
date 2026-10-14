@@ -29,11 +29,25 @@ android {
         versionName = flutter.versionName
     }
 
+    // CI writes the release keystore from repository secrets. One stable key
+    // means each new APK installs over the previous one and keeps app data.
+    // Without the secrets (local builds) it falls back to the debug key.
+    val releaseStore = System.getenv("TASMOHUB_KEYSTORE")?.let { file(it) }
+    signingConfigs {
+        if (releaseStore != null && releaseStore.exists()) {
+            create("release") {
+                storeFile = releaseStore
+                storePassword = System.getenv("TASMOHUB_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("TASMOHUB_KEY_ALIAS")
+                keyPassword = System.getenv("TASMOHUB_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 }
