@@ -57,7 +57,8 @@ class _OtaScreenState extends State<OtaScreen> {
   Future<void> _loadTarget() async {
     setState(() => _targetError = null);
     try {
-      final t = await _ota.readTarget(d, _pw);
+      final t = await _ota.readTarget(d, _pw,
+          hardwareHint: widget.store.stateOf(d).hardware);
       if (mounted) setState(() => _target = t);
     } catch (e) {
       if (mounted) setState(() => _targetError = '$e');
@@ -200,7 +201,8 @@ class _OtaScreenState extends State<OtaScreen> {
               esp32: before.isEsp32, onStep: _setStep);
         }
         _setStep('Waiting for the device to restart…');
-        final after = await _ota.waitForDevice(d, _pw, onStep: _setStep);
+        final after = await _ota.waitForDevice(d, _pw,
+            hardwareHint: before.hardware, onStep: _setStep);
         _target = after;
         _after = _postChecks(before, after, r);
         await widget.store.refresh(d);
@@ -218,7 +220,8 @@ class _OtaScreenState extends State<OtaScreen> {
     await _ota.flashTasmota(d, _pw, rep.payload, rep.uploadName,
         esp32: false, onStep: (s) => _setStep('Minimal: $s'));
     _setStep('Waiting for the minimal firmware to start…');
-    final mid = await _ota.waitForDevice(d, _pw, onStep: _setStep);
+    final mid = await _ota.waitForDevice(d, _pw,
+        hardwareHint: t.hardware, onStep: _setStep);
     if (!mid.version.toLowerCase().contains('minimal')) {
       throw OtaException('Device did not switch to the minimal firmware '
           '(reports ${mid.version}). Nothing else was changed.');

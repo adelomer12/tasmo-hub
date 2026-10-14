@@ -19,6 +19,7 @@ class FakeDevice {
   List<String> u4Answers = ['none'];
   bool failUpload = false;
   bool garbleReply = false;
+  bool minimal = false;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -57,6 +58,15 @@ class FakeDevice {
         res.write(failUpload
             ? '<b>Upload <font>Failed</font></b><br><br>Not enough space'
             : '<b>Upload <font>Successful</font></b>');
+      case '/cm':
+        res.headers.contentType = ContentType.json;
+        res.write(minimal
+            ? '{}'
+            : '{"StatusFWR":{"Version":"15.6.0(release-tasmota)","Hardware":"ESP8285N08"}}');
+      case '/':
+        res.headers.contentType = ContentType.html;
+        res.write(
+            '<div>MINIMAL firmware</div><a>Tasmota 15.6.0 (release-minimal) by Theo Arends</a>');
       case '/api/ota':
         received =
             (await req.fold<BytesBuilder>(BytesBuilder(), (b, d) => b..add(d)))
@@ -136,6 +146,25 @@ void main() {
         esp32: false, onStep: steps.add);
     expect(dev.received, payload);
     expect(steps.last, 'Upload sent; waiting for the device…');
+  });
+
+  test('minimal build: version from the web page, chip from the hint',
+      () async {
+    dev.minimal = true;
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    final t =
+        await OtaService().readTarget(d, null, hardwareHint: 'ESP8285N08');
+    expect(t.version, '15.6.0(release-minimal)');
+    expect(t.isStepStone, isTrue);
+    expect(t.isEsp8266, isTrue);
+    expect(t.tasmotaVariant, 'tasmota');
+  });
+
+  test('full build: version from Status 2', () async {
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    final t = await OtaService().readTarget(d, null);
+    expect(t.version, '15.6.0(release-tasmota)');
+    expect(t.hardware, 'ESP8285N08');
   });
 
   test('OpenBeken: raw body to /api/ota then reboot', () async {

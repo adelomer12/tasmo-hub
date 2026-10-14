@@ -59,12 +59,24 @@ class OtaService {
   // ---- device info --------------------------------------------------------
 
   /// Reads Status 2 (firmware) and, on Tasmota, Status 4 (free space).
-  Future<FwTarget> readTarget(Device d, String? password) async {
+  ///
+  /// Tasmota's minimal build answers /cm with an empty `{}` (it builds the
+  /// reply from its log, which minimal keeps quiet), so the version then
+  /// comes from the footer of its web page instead. [hardwareHint] fills the
+  /// chip name the minimal build cannot report.
+  Future<FwTarget> readTarget(Device d, String? password,
+      {String hardwareHint = ''}) async {
     final s2 = await api.send(d.host, 'Status 2',
         username: d.username, password: password);
     final fwr = s2['StatusFWR'] is Map
         ? Map<String, dynamic>.from(s2['StatusFWR'] as Map)
         : <String, dynamic>{};
+    var version = '${fwr['Version'] ?? ''}';
+    var hardware = '${fwr['Hardware'] ?? ''}';
+    if (version.isEmpty && d.type != FirmwareType.openbeken) {
+      version = await _versionFromWebPage(d, password) ?? '';
+    }
+    if (hardware.isEmpty) hardware = hardwareHint;
     int? free;
     if (d.type != FirmwareType.openbeken) {
       try {
@@ -78,10 +90,29 @@ class OtaService {
     }
     return FwTarget(
       type: d.type,
-      hardware: '${fwr['Hardware'] ?? ''}',
-      version: '${fwr['Version'] ?? ''}',
+      hardware: hardware,
+      version: version,
       freeSketchKb: free,
     );
+  }
+
+  /// "Tasmota 15.6.0 (release-minimal) by Theo Arends" -> "15.6.0(release-minimal)".
+  Future<String?> _versionFromWebPage(Device d, String? password) async {
+    try {
+      final res = await _client
+          .get(_url(d, '/'), headers: _auth(d, password))
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return null;
+      return parseTasmotaFooter(res.body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? parseTasmotaFooter(String html) {
+    final m = RegExp(r'Tasmota\s+(\d+\.\d+\.\d+(?:\.\d+)?)\s*\(([^)]+)\)')
+        .firstMatch(html);
+    return m == null ? null : '${m[1]}(${m[2]})';
   }
 
   // ---- official sources ---------------------------------------------------
@@ -434,17 +465,21 @@ class OtaService {
   /// Waits for the device to answer again and returns its firmware version.
   Future<FwTarget> waitForDevice(Device d, String? password,
       {Duration timeout = const Duration(minutes: 4),
+      String hardwareHint = '',
       void Function(String step)? onStep}) async {
     final deadline = DateTime.now().add(timeout);
     await Future<void>.delayed(const Duration(seconds: 8));
+    FwTarget? last;
     while (DateTime.now().isBefore(deadline)) {
       try {
-        return await readTarget(d, password);
-      } catch (_) {
-        onStep?.call('Waiting for the device to restart…');
-        await Future<void>.delayed(const Duration(seconds: 3));
-      }
+        last = await readTarget(d, password, hardwareHint: hardwareHint);
+        // Right after boot the reply can still be empty; wait for a version.
+        if (last.version.isNotEmpty) return last;
+      } catch (_) {}
+      onStep?.call('Waiting for the device to restart…');
+      await Future<void>.delayed(const Duration(seconds: 3));
     }
+    if (last != null) return last;
     throw OtaException('Device did not come back online. If it does not '
         'appear within a few minutes, power-cycle it.');
   }
