@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/device.dart';
 import '../services/device_store.dart';
 import '../widgets/device_tile.dart';
+import 'arrange_screen.dart';
 import 'device_edit_dialog.dart';
 import 'device_screen.dart';
 import 'discovery_screen.dart';
@@ -57,6 +58,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openScenes() => Navigator.of(context)
       .push(MaterialPageRoute(builder: (_) => ScenesScreen(store: store)));
+
+  Future<void> _openArrange() => Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => ArrangeScreen(store: store)));
 
   Future<void> _addManual() async {
     await showDialog<void>(
@@ -116,9 +120,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (v == 'settings') _settings();
                   if (v == 'mqtt') _openMqtt();
                   if (v == 'scenes') _openScenes();
+                  if (v == 'arrange') _openArrange();
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'scenes', child: Text('Scenes')),
+                  PopupMenuItem(value: 'arrange', child: Text('Arrange')),
                   PopupMenuItem(value: 'add', child: Text('Add by IP')),
                   PopupMenuItem(value: 'mqtt', child: Text('MQTT broker')),
                   PopupMenuItem(

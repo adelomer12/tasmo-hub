@@ -31,6 +31,7 @@ class DeviceStore extends ChangeNotifier {
   static const _pwPrefix = 'pw_';
   static const _pollKey = 'poll_seconds';
   static const _scenesKey = 'scenes_v1';
+  static const _roomOrderKey = 'room_order_v1';
   static const discoveryFilter = 'tasmota/discovery/+/config';
 
   final TasmotaApi api;
@@ -40,6 +41,9 @@ class DeviceStore extends ChangeNotifier {
 
   final List<Device> _devices = [];
   final List<Scene> _scenes = [];
+
+  /// Room order chosen by the user; rooms not listed follow alphabetically.
+  List<String> _roomOrder = [];
   final Map<String, DeviceState> _state = {};
   final Map<String, String> _passwords = {};
   final Map<String, Completer<Map<String, dynamic>>> _pendingResult = {};
@@ -76,8 +80,40 @@ class DeviceStore extends ChangeNotifier {
   String? passwordOf(Device d) => _passwords[d.id];
 
   List<String> get rooms {
-    final r = _devices.map((d) => d.room.trim()).toSet().toList()..sort();
-    return r;
+    final present = _devices.map((d) => d.room.trim()).toSet();
+    final ordered = [
+      for (final r in _roomOrder)
+        if (present.remove(r)) r
+    ];
+    return [...ordered, ...present.toList()..sort()];
+  }
+
+  /// Saves the order rooms are shown in.
+  Future<void> reorderRooms(List<String> order) async {
+    _roomOrder = [for (final r in order) r.trim()];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_roomOrderKey, _roomOrder);
+    notifyListeners();
+  }
+
+  /// Puts the devices of [room] in the order of [deviceIds]. Devices keep
+  /// the slots their room already had in the saved list, so other rooms
+  /// are untouched.
+  Future<void> reorderRoom(String room, List<String> deviceIds) async {
+    final slots = [
+      for (var i = 0; i < _devices.length; i++)
+        if (_devices[i].room.trim() == room.trim()) i
+    ];
+    final byId = {for (final i in slots) _devices[i].id: _devices[i]};
+    if (deviceIds.length != slots.length ||
+        !deviceIds.every(byId.containsKey)) {
+      throw ArgumentError('Device list does not match room "$room"');
+    }
+    for (var k = 0; k < slots.length; k++) {
+      _devices[slots[k]] = byId[deviceIds[k]]!;
+    }
+    await _save();
+    notifyListeners();
   }
 
   Device? byId(String id) {
@@ -103,6 +139,7 @@ class DeviceStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsKey);
     pollSeconds = prefs.getInt(_pollKey) ?? 10;
+    _roomOrder = prefs.getStringList(_roomOrderKey) ?? [];
     if (raw != null) {
       try {
         _devices
