@@ -61,7 +61,8 @@ jobs:
           TASMOHUB_KEY_PASSWORD: ${{ secrets.TASMOHUB_KEYSTORE_PASSWORD }}
       - name: Show the signing certificate
         run: |
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs \
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$apksigner" verify --print-certs \
             build/app/outputs/flutter-apk/app-release.apk | grep -i 'SHA-256' | head -1 || true
       - uses: actions/upload-artifact@v4
         with:
