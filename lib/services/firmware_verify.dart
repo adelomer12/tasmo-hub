@@ -520,3 +520,9 @@ void _checkObk(FirmwareReport r, Uint8List b, String lower, FwTarget t) {
   // Deeper content checks for OBK formats happen in the device bootloader,
   // which keeps the old firmware if the new image fails its CRC.
 }
+
+/// True when an OpenBeken startup command turns on Wi-Fi power save.
+/// On BL602 with 1.18.318, `PowerSave 1` in the startup command kept the
+/// plug from ever rejoining Wi-Fi after the update (field report 2026-10-15).
+bool obkStartupHasPowerSave(String startupPage) =>
+    RegExp(r'\bPowerSave\s+[1-9]', caseSensitive: false).hasMatch(startupPage);

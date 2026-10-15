@@ -10,6 +10,14 @@ import 'package:tasmo_hub/services/firmware_verify.dart';
 /// tasmota32.bin, tasmota32c3.bin and tasmota32.factory.bin (CI downloads
 /// them; they are too big to commit). Synthetic images run everywhere.
 void main() {
+  test('OpenBeken startup command with PowerSave is flagged', () {
+    const line = 'backlog startDriver ntp; ntp_timeZoneOfs 3; PowerSave 1; '
+        'SetStartValue 1 -1';
+    expect(obkStartupHasPowerSave('<textarea>$line</textarea>'), isTrue);
+    expect(obkStartupHasPowerSave('PowerSave 0; SetStartValue 1 -1'), isFalse);
+    expect(obkStartupHasPowerSave('startDriver ntp'), isFalse);
+  });
+
   const esp8266 = FwTarget(
       type: FirmwareType.tasmota,
       hardware: 'ESP8266EX',

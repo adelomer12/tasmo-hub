@@ -36,6 +36,7 @@ class _OtaScreenState extends State<OtaScreen> {
   String? _error;
 
   List<FwCheck>? _after;
+  bool _obkPowerSave = false;
 
   Device get d => widget.device;
   String? get _pw => widget.store.passwordOf(d);
@@ -60,6 +61,12 @@ class _OtaScreenState extends State<OtaScreen> {
       final t = await _ota.readTarget(d, _pw,
           hardwareHint: widget.store.stateOf(d).hardware);
       if (mounted) setState(() => _target = t);
+      if (_isObk) {
+        final page = await _ota.obkStartupCommand(d, _pw);
+        if (mounted && page != null) {
+          setState(() => _obkPowerSave = obkStartupHasPowerSave(page));
+        }
+      }
     } catch (e) {
       if (mounted) setState(() => _targetError = '$e');
     }
@@ -132,7 +139,14 @@ class _OtaScreenState extends State<OtaScreen> {
       r.checks.removeLast();
       r.add(CheckLevel.ok, 'SHA-256 matches the release digest');
     }
-    if (!r.digestVerified && typed == null) {
+    if (_isObk && _obkPowerSave) {
+      r.add(
+          CheckLevel.warn,
+          'Startup command turns on PowerSave',
+          'remove PowerSave from Config → Startup command first: with it, '
+              'a BL602 on 1.18.318 did not rejoin Wi-Fi after updating');
+    }
+        if (!r.digestVerified && typed == null) {
       r.add(
           CheckLevel.warn,
           'No published SHA-256 to compare',

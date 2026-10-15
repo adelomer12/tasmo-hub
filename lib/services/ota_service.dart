@@ -449,6 +449,20 @@ class OtaService {
     return (int.parse(m[1]!), split < 0 ? '' : text.substring(split + 4));
   }
 
+  /// Reads an OpenBeken plug's startup command from its /startup_command page.
+  /// Returns null when the page cannot be read.
+  Future<String?> obkStartupCommand(Device d, String? password) async {
+    try {
+      final res = await _client
+          .get(_url(d, '/startup_command'), headers: _auth(d, password))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) return null;
+      return res.body;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// OpenBeken: raw body to /api/ota, then /api/reboot.
   Future<void> flashObk(Device d, String? password, Uint8List payload,
       {void Function(String step)? onStep}) async {
