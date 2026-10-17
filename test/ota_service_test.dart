@@ -19,6 +19,7 @@ class FakeDevice {
   /// Answers for /u4 in order; the last one repeats.
   List<String> u4Answers = ['none'];
   bool failUpload = false;
+  int abortUploads = 0;
   bool garbleReply = false;
   bool minimal = false;
   String? rootHtml;
@@ -57,6 +58,13 @@ class FakeDevice {
               '\r\n\r\n5\r\nbad chunk sizes'));
           await s.close();
           return;
+        }
+        if (abortUploads > 0) {
+          abortUploads--;
+          res.write('<b>Upload <font color="red">Failed</font></b><br><br>'
+              'Upload aborted<br><br><form><button>Main Menu</button></form>'
+              '<a>Tasmota 15.6.0 (release-tasmota) by Theo Arends</a>');
+          break;
         }
         res.write(failUpload
             ? '<b>Upload <font>Failed</font></b><br><br>Not enough space'
@@ -171,6 +179,40 @@ void main() {
             .flashTasmota(d, null, payload, 'tasmota.bin', esp32: false),
         throwsA(isA<OtaException>().having(
             (e) => e.message, 'message', contains('Not enough space'))));
+  });
+
+  test('an aborted upload is sent again', () async {
+    dev.abortUploads = 1;
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    final steps = <String>[];
+    await (OtaService()..retryPause = Duration.zero).flashTasmota(
+        d, null, payload, 'tasmota.bin',
+        esp32: false, onStep: steps.add);
+    expect(dev.log.where((l) => l.startsWith('POST /u2')), hasLength(2));
+    expect(dev.received, payload);
+    expect(steps,
+        contains('Connection dropped (device: Upload aborted); retrying…'));
+  });
+
+  test('upload that keeps aborting gives up with a clear message', () async {
+    dev.abortUploads = 99;
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    await expectLater(
+        (OtaService()..retryPause = Duration.zero)
+            .flashTasmota(d, null, payload, 'tasmota.bin', esp32: false),
+        throwsA(isA<OtaException>().having((e) => e.message, 'message',
+            allOf(contains('3 times'), contains('Nothing was written')))));
+    expect(dev.log.where((l) => l.startsWith('POST /u2')), hasLength(3));
+  });
+
+  test('failure reason drops the menu and footer', () {
+    expect(
+        uploadFailureReason('<b>Upload <font color="red">Failed</font></b>'
+            '<br><br>Upload aborted<br><br><button>Main Menu</button>'
+            'Tasmota 15.6.0 (release-tasmota) by Theo Arends'),
+        'Upload aborted');
+    expect(
+        uploadFailureReason('<b>Upload <font>Successful</font></b>'), isNull);
   });
 
   test('unreadable reply after a full upload is not an error', () async {

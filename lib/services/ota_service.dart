@@ -367,6 +367,31 @@ class OtaService {
       }
     }
 
+    // A dropped connection makes Tasmota abort the upload and keep running
+    // the old firmware untouched, so the upload is simply sent again.
+    for (var attempt = 1;; attempt++) {
+      try {
+        await _uploadOnce(d, auth, payload, fileName, onStep);
+        return;
+      } on _UploadDropped catch (e) {
+        if (attempt >= uploadAttempts) {
+          throw OtaException('The connection dropped during the upload '
+              '$attempt times (${e.reason}). Nothing was written; the device '
+              'still runs its old firmware. Check its Wi-Fi signal and try '
+              'again.');
+        }
+        onStep?.call('Connection dropped (${e.reason}); retrying…');
+        await Future<void>.delayed(retryPause);
+      }
+    }
+  }
+
+  /// How often an upload is tried when the connection drops mid-way.
+  static const uploadAttempts = 3;
+  Duration retryPause = const Duration(seconds: 3);
+
+  Future<void> _uploadOnce(Device d, Map<String, String> auth,
+      Uint8List payload, String fileName, void Function(String)? onStep) async {
     onStep?.call('Preparing upload…');
     final http.Response prep;
     try {
@@ -394,12 +419,12 @@ class OtaService {
     }
     final (code, body) = status;
     if (code == 401) throw OtaException('Web password rejected');
-    final text = body.replaceAll(RegExp(r'<[^>]+>'), ' ');
-    if (RegExp(r'\bFailed\b', caseSensitive: false).hasMatch(text)) {
-      final m =
-          RegExp(r'Failed\s+(.{0,80})', caseSensitive: false).firstMatch(text);
-      throw OtaException(
-          'Device rejected the file: ${m?.group(1)?.trim() ?? 'upload failed'}');
+    final reason = uploadFailureReason(body);
+    if (reason != null) {
+      if (RegExp(r'aborted', caseSensitive: false).hasMatch(reason)) {
+        throw _UploadDropped('device: $reason');
+      }
+      throw OtaException('Device rejected the file: $reason');
     }
     if (code != 200) throw OtaException('Upload failed (HTTP $code)');
     onStep?.call('Upload sent; waiting for the device…');
@@ -466,7 +491,7 @@ class OtaService {
     } catch (e) {
       socket.destroy();
       if (reply.isNotEmpty) return _parseReply(reply.takeBytes());
-      throw OtaException('Upload interrupted: $e');
+      throw _UploadDropped(e is TimeoutException ? 'stalled' : 'socket closed');
     }
     await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
     socket.destroy();
@@ -554,6 +579,22 @@ class OtaService {
   }
 
   void close() => _client.close();
+}
+
+/// The error line of Tasmota's "Upload Failed" page, without the page's
+/// menu and footer text; null when the page does not report a failure.
+String? uploadFailureReason(String html) {
+  final m = RegExp(r'Failed(?:\s*</[^>]+>)*\s*(?:<br\s*/?>\s*)*([^<]*)',
+          caseSensitive: false)
+      .firstMatch(html);
+  if (m == null) return null;
+  final line = m.group(1)!.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return line.isEmpty ? 'upload failed' : line;
+}
+
+class _UploadDropped implements Exception {
+  _UploadDropped(this.reason);
+  final String reason;
 }
 
 /// Tasmota's safeboot build shows "SAFEBOOT" above the device name and

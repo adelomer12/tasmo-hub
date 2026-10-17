@@ -254,8 +254,12 @@ class _OtaScreenState extends State<OtaScreen> {
       throw OtaException('Minimal firmware failed verification: '
           '${rep.checks.firstWhere((c) => c.level == CheckLevel.fail).label}');
     }
-    await _ota.flashTasmota(d, _pw, rep.payload, rep.uploadName,
-        esp32: false, onStep: (s) => _setStep('Minimal: $s'));
+    try {
+      await _ota.flashTasmota(d, _pw, rep.payload, rep.uploadName,
+          esp32: false, onStep: (s) => _setStep('Minimal: $s'));
+    } on OtaException catch (e) {
+      throw OtaException('Minimal firmware step: ${e.message}');
+    }
     _setStep('Waiting for the minimal firmware to start…');
     final mid = await _ota.waitForDevice(d, _pw,
         hardwareHint: t.hardware, onStep: _setStep);
