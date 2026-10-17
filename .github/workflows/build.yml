@@ -54,7 +54,7 @@ jobs:
           else
             echo "::warning::TASMOHUB_KEYSTORE_B64 secret not set; APK is signed with a throwaway debug key and will not install over earlier builds."
           fi
-      - run: flutter build apk --release
+      - run: flutter build apk --release --dart-define=GIT_SHA=${{ github.sha }}
         env:
           TASMOHUB_KEYSTORE_PASSWORD: ${{ secrets.TASMOHUB_KEYSTORE_PASSWORD }}
           TASMOHUB_KEY_ALIAS: tasmohub

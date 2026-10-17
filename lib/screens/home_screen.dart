@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/device.dart';
 import '../services/device_store.dart';
 import '../widgets/device_tile.dart';
+import 'about_screen.dart';
 import 'arrange_screen.dart';
 import 'device_edit_dialog.dart';
 import 'device_screen.dart';
@@ -61,6 +62,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openArrange() => Navigator.of(context)
       .push(MaterialPageRoute(builder: (_) => ArrangeScreen(store: store)));
+
+  Future<void> _openAbout() => Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => const AboutScreen()));
 
   Future<void> _addManual() async {
     await showDialog<void>(
@@ -121,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (v == 'mqtt') _openMqtt();
                   if (v == 'scenes') _openScenes();
                   if (v == 'arrange') _openArrange();
+                  if (v == 'about') _openAbout();
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'scenes', child: Text('Scenes')),
@@ -129,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   PopupMenuItem(value: 'mqtt', child: Text('MQTT broker')),
                   PopupMenuItem(
                       value: 'settings', child: Text('Refresh interval')),
+                  PopupMenuItem(value: 'about', child: Text('About')),
                 ],
               ),
             ],
@@ -221,14 +227,39 @@ class _RoomHeader extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall),
           ),
           TextButton(
-              onPressed: () => store.setRoomPower(room, false),
+              onPressed: () => _confirmAll(context, false),
               child: const Text('All off')),
           TextButton(
-              onPressed: () => store.setRoomPower(room, true),
+              onPressed: () => _confirmAll(context, true),
               child: const Text('All on')),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmAll(BuildContext context, bool on) async {
+    final count = store.devices.where((d) => d.room.trim() == room).length;
+    final name = room.isEmpty ? 'with no room' : 'in $room';
+    final word = on ? 'on' : 'off';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(on ? Icons.power : Icons.power_off),
+        title: Text('Turn all $word?'),
+        content: Text('This switches $word $count '
+            '${count == 1 ? 'device' : 'devices'} $name. '
+            'Locked devices are skipped.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('All $word')),
+        ],
+      ),
+    );
+    if (ok == true) await store.setRoomPower(room, on);
   }
 }
 

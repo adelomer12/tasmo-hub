@@ -146,7 +146,7 @@ class _OtaScreenState extends State<OtaScreen> {
           'remove PowerSave from Config → Startup command first: with it, '
               'a BL602 on 1.18.318 did not rejoin Wi-Fi after updating');
     }
-        if (!r.digestVerified && typed == null) {
+    if (!r.digestVerified && typed == null) {
       r.add(
           CheckLevel.warn,
           'No published SHA-256 to compare',
