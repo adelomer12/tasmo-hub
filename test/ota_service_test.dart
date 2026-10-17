@@ -21,6 +21,7 @@ class FakeDevice {
   bool failUpload = false;
   bool garbleReply = false;
   bool minimal = false;
+  String? rootHtml;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -67,7 +68,7 @@ class FakeDevice {
             : '{"StatusFWR":{"Version":"15.6.0(release-tasmota)","Hardware":"ESP8285N08"}}');
       case '/':
         res.headers.contentType = ContentType.html;
-        res.write(
+        res.write(rootHtml ??
             '<div>MINIMAL firmware</div><a>Tasmota 15.6.0 (release-minimal) by Theo Arends</a>');
       case '/api/ota':
         received =
@@ -129,6 +130,25 @@ void main() {
     expect(dev.received, payload);
     expect(dev.auth, isNull);
   }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('ESP32 safeboot page counts when /u4 never says "true"', () async {
+    // Like the POWR320D: after the restart, /u4 answers with the main page.
+    dev.u4Answers = ['false', '<html>page</html>'];
+    dev.rootHtml = "<span style='text-align:center;color:#ff5661;'>"
+        '<h3>SAFEBOOT</h3></span><h3>Sonoff POWR320D</h3>';
+    final d = Device(id: 'x', host: dev.host, name: 'Plug');
+    final steps = <String>[];
+    await OtaService().flashTasmota(d, null, payload, 'tasmota32.bin',
+        esp32: true, onStep: steps.add);
+    expect(steps, contains('Safeboot page found'));
+    expect(dev.received, payload);
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('safeboot page detection', () {
+    expect(isSafebootPage('<span><h3>SAFEBOOT</h3></span>'), isTrue);
+    expect(isSafebootPage('Tasmota 13.2.0 (release-safeboot)'), isTrue);
+    expect(isSafebootPage('<h3>Sonoff POWR320D</h3><h2>Waleed</h2>'), isFalse);
+  });
 
   test('Tasmota requests carry a same-device Referer', () async {
     dev.u4Answers = ['true'];

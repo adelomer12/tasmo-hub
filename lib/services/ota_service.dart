@@ -319,10 +319,16 @@ class OtaService {
       // Devices with a safeboot partition must restart into it first.
       // /u4?u4=fct&api= answers "none" (dual OTA partitions: go ahead),
       // "true" (already in safeboot) or "false" (restarting into safeboot).
-      final deadline = DateTime.now().add(const Duration(minutes: 2));
+      // Some safeboot builds never answer "true" here (seen on a
+      // POWR320D whose safeboot is 13.2.0), so once the device has been
+      // asked to restart, its root page saying SAFEBOOT also counts.
+      final deadline = DateTime.now().add(const Duration(minutes: 3));
+      var restarting = false;
+      var last = 'no reply';
       while (true) {
         if (DateTime.now().isAfter(deadline)) {
-          throw OtaException('Device did not come back in safeboot mode');
+          throw OtaException(
+              'Device did not come back in safeboot mode (last reply: $last)');
         }
         String? answer;
         try {
@@ -334,14 +340,24 @@ class OtaService {
           }
           if (res.statusCode == 404) break; // older builds: no safeboot step
           answer = res.body.trim();
+          last = 'HTTP ${res.statusCode} '
+              '"${answer.length > 40 ? '${answer.substring(0, 40)}…' : answer}"';
         } on OtaException {
           rethrow;
-        } catch (_) {
-          answer = null; // restarting
+        } on TimeoutException {
+          last = 'timed out';
+        } catch (e) {
+          last = 'not reachable';
         }
         if (answer == 'none') break;
         if (answer == 'true') {
           // Same pause the device's own upload page makes.
+          await Future<void>.delayed(const Duration(seconds: 1));
+          break;
+        }
+        if (answer == 'false' || answer == null) restarting = true;
+        if (restarting && answer != 'false' && await _showsSafeboot(d, auth)) {
+          onStep?.call('Safeboot page found');
           await Future<void>.delayed(const Duration(seconds: 1));
           break;
         }
@@ -352,9 +368,14 @@ class OtaService {
     }
 
     onStep?.call('Preparing upload…');
-    final prep = await _client
-        .get(_url(d, '/up'), headers: auth)
-        .timeout(const Duration(seconds: 10));
+    final http.Response prep;
+    try {
+      prep = await _client
+          .get(_url(d, '/up'), headers: auth)
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      throw OtaException('Device did not answer its upgrade page');
+    }
     if (prep.statusCode == 401) throw OtaException('Web password rejected');
     if (prep.statusCode != 200) {
       throw OtaException('Device refused the upgrade page '
@@ -382,6 +403,18 @@ class OtaService {
     }
     if (code != 200) throw OtaException('Upload failed (HTTP $code)');
     onStep?.call('Upload sent; waiting for the device…');
+  }
+
+  /// True when the device's main page is Tasmota's safeboot page.
+  Future<bool> _showsSafeboot(Device d, Map<String, String> auth) async {
+    try {
+      final res = await _client
+          .get(_url(d, '/'), headers: auth)
+          .timeout(const Duration(seconds: 5));
+      return res.statusCode == 200 && isSafebootPage(res.body);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Multipart POST to /u2 over a raw socket with HTTP/1.0.
@@ -522,3 +555,8 @@ class OtaService {
 
   void close() => _client.close();
 }
+
+/// Tasmota's safeboot build shows "SAFEBOOT" above the device name and
+/// "(release-safeboot)" style text in the footer on newer builds.
+bool isSafebootPage(String html) =>
+    RegExp(r'>\s*SAFEBOOT\s*<|release-safeboot').hasMatch(html);
