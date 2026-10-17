@@ -223,6 +223,14 @@ class _OtaScreenState extends State<OtaScreen> {
         _target = after;
         _after = _postChecks(before, after, r);
         await widget.store.refresh(d);
+        if (!_isObk &&
+            !r.uploadName.contains('minimal') &&
+            after.version.toLowerCase().contains('minimal')) {
+          // Easy to miss in the checks below; the device needs one more go.
+          throw OtaException('The full firmware did not take: ${d.name} is '
+              'still on the temporary minimal build. Tap "Latest Tasmota '
+              'release" and flash again.');
+        }
       });
 
   static bool _inSafeboot(FwTarget t) =>
