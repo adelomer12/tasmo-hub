@@ -58,13 +58,6 @@ class AboutScreen extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 8),
-          for (final (label, url) in _links)
-            ListTile(
-              leading: const Icon(Icons.open_in_new),
-              title: Text(label),
-              onTap: () => launchUrl(Uri.parse(url),
-                  mode: LaunchMode.externalApplication),
-            ),
           ListTile(
             leading: const Icon(Icons.code),
             title: const Text('TasmoHub on GitHub'),
@@ -72,6 +65,13 @@ class AboutScreen extends StatelessWidget {
             onTap: () => launchUrl(Uri.parse(repoUrl),
                 mode: LaunchMode.externalApplication),
           ),
+          for (final (label, url) in _links)
+            ListTile(
+              leading: const Icon(Icons.open_in_new),
+              title: Text(label),
+              onTap: () => launchUrl(Uri.parse(url),
+                  mode: LaunchMode.externalApplication),
+            ),
         ],
       ),
     );
