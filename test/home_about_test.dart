@@ -57,5 +57,7 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: AboutScreen()));
     expect(find.text('TasmoHub'), findsOneWidget);
     expect(find.textContaining('Version $appVersion'), findsOneWidget);
+    expect(find.text('TasmoHub on GitHub'), findsOneWidget);
+    expect(find.text('Open-source licenses'), findsNothing);
   });
 }

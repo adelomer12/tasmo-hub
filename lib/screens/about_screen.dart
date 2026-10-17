@@ -66,13 +66,11 @@ class AboutScreen extends StatelessWidget {
                   mode: LaunchMode.externalApplication),
             ),
           ListTile(
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('Open-source licenses'),
-            onTap: () => showLicensePage(
-              context: context,
-              applicationName: 'TasmoHub',
-              applicationVersion: appVersion,
-            ),
+            leading: const Icon(Icons.code),
+            title: const Text('TasmoHub on GitHub'),
+            subtitle: const Text('github.com/adelomer12/tasmo-hub'),
+            onTap: () => launchUrl(Uri.parse(repoUrl),
+                mode: LaunchMode.externalApplication),
           ),
         ],
       ),
