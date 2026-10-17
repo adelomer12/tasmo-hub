@@ -275,7 +275,15 @@ class DeviceStore extends ChangeNotifier {
 
   // ---- live state -------------------------------------------------------
 
+  /// Devices being flashed. They get no status polls meanwhile: a small
+  /// ESP8266 receiving firmware can crash when other requests arrive.
+  final Set<String> _flashing = {};
+
+  void setFlashing(Device d, bool on) =>
+      on ? _flashing.add(d.id) : _flashing.remove(d.id);
+
   Future<void> refresh(Device d) async {
+    if (_flashing.contains(d.id)) return;
     if (usesMqtt(d)) {
       _requestStatus(d);
       return;
@@ -381,6 +389,7 @@ class DeviceStore extends ChangeNotifier {
   }
 
   void _requestStatus(Device d) {
+    if (_flashing.contains(d.id)) return;
     mqtt.publish(
         TasmotaTopics.build(d.fullTopic, d.cmndPrefix, d.mqttTopic, 'STATUS'),
         '0');

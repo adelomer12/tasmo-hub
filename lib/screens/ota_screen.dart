@@ -205,33 +205,43 @@ class _OtaScreenState extends State<OtaScreen> {
   }
 
   Future<void> _flash() => _run(() async {
-        final r = _report!;
-        final before = _target!;
-        if (_isObk) {
-          await _ota.flashObk(d, _pw, r.payload, onStep: _setStep);
-        } else {
-          if (_needsMinimal) await _flashMinimalFirst(before);
-          await _ota.flashTasmota(d, _pw, r.payload, r.uploadName,
-              esp32: before.isEsp32, onStep: _setStep);
-        }
-        _setStep('Waiting for the device to restart…');
-        var after = await _ota.waitForDevice(d, _pw,
-            hardwareHint: before.hardware, onStep: _setStep);
-        if (!_isObk && before.isEsp32 && _inSafeboot(after)) {
-          after = await _leaveSafeboot(before, r);
-        }
-        _target = after;
-        _after = _postChecks(before, after, r);
-        await widget.store.refresh(d);
-        if (!_isObk &&
-            !r.uploadName.contains('minimal') &&
-            after.version.toLowerCase().contains('minimal')) {
-          // Easy to miss in the checks below; the device needs one more go.
-          throw OtaException('The full firmware did not take: ${d.name} is '
-              'still on the temporary minimal build. Tap "Latest Tasmota '
-              'release" and flash again.');
+        widget.store.setFlashing(d, true);
+        try {
+          await _flashSteps();
+        } finally {
+          widget.store.setFlashing(d, false);
         }
       });
+
+  Future<void> _flashSteps() async {
+    final r = _report!;
+    final before = _target!;
+    if (_isObk) {
+      await _ota.flashObk(d, _pw, r.payload, onStep: _setStep);
+    } else {
+      if (_needsMinimal) await _flashMinimalFirst(before);
+      await _ota.flashTasmota(d, _pw, r.payload, r.uploadName,
+          esp32: before.isEsp32, onStep: _setStep);
+    }
+    _setStep('Waiting for the device to restart…');
+    var after = await _ota.waitForDevice(d, _pw,
+        hardwareHint: before.hardware, onStep: _setStep);
+    if (!_isObk && before.isEsp32 && _inSafeboot(after)) {
+      after = await _leaveSafeboot(before, r);
+    }
+    _target = after;
+    _after = _postChecks(before, after, r);
+    widget.store.setFlashing(d, false);
+    await widget.store.refresh(d);
+    if (!_isObk &&
+        !r.uploadName.contains('minimal') &&
+        after.version.toLowerCase().contains('minimal')) {
+      // Easy to miss in the checks below; the device needs one more go.
+      throw OtaException('The full firmware did not take: ${d.name} is '
+          'still on the temporary minimal build. Tap "Latest Tasmota '
+          'release" and flash again.');
+    }
+  }
 
   static bool _inSafeboot(FwTarget t) =>
       t.version.toLowerCase().contains('safeboot');
