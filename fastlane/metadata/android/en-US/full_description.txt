@@ -1,0 +1,22 @@
+TasmoHub discovers and controls <b>Tasmota</b> and <b>OpenBeken</b> smart plugs, switches, lights and sensors directly on your local network. There is no cloud, no account and no telemetry: the phone talks straight to each device's HTTP API, or to your own MQTT broker if you have one.
+
+<b>Features</b>
+<ul>
+<li>Find devices with a subnet scan (any range or single IP) or mDNS, and detect Tasmota vs OpenBeken automatically</li>
+<li>Dashboard grouped by room, with per-relay switches, live temperature, humidity and power, and room-wide All on / All off</li>
+<li>Device page with every relay, dimmer, colour temperature and colour, all sensors, firmware, Wi-Fi and uptime details</li>
+<li>Tasmota timers (Timer1-16 with sunrise/sunset offsets) and a Rule1-3 editor</li>
+<li>Energy card with power, voltage and current, plus resets for today, yesterday and total</li>
+<li>Scenes: named groups of commands across devices, run from the home screen</li>
+<li>Home screen widget and three Quick Settings tiles that toggle a device without opening the app</li>
+<li>Firmware updates (OTA) for Tasmota and OpenBeken from the official releases, with the image verified (checksums, chip type, SHA-256 against the release) before it is sent</li>
+<li>Raw command console with pretty-printed JSON</li>
+<li>Optional MQTT: live updates, control through the broker (useful when the phone cannot reach an IoT VLAN directly) and Tasmota MQTT discovery</li>
+</ul>
+
+<b>Privacy and security</b>
+<ul>
+<li>Device and broker passwords are kept in the Android Keystore, never in plain preferences, and Android backup is disabled</li>
+<li>The app only contacts your own devices and broker, plus GitHub and ota.tasmota.com when you ask it to download a firmware update</li>
+<li>Tasmota sends web passwords as URL parameters over plain HTTP, so keep IoT devices on their own VLAN</li>
+</ul>

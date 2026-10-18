@@ -25,6 +25,15 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
+      - name: Check the F-Droid changelog for this version
+        run: |
+          code=$(sed -nE 's/^version:[[:space:]]*[^+]+\+([0-9]+).*/\1/p' pubspec.yaml)
+          f=fastlane/metadata/android/en-US/changelogs/$code.txt
+          if [ ! -s "$f" ]; then
+            echo "::warning::$f is missing; F-Droid will show no changelog for versionCode $code."
+          elif [ "$(wc -c < "$f")" -gt 500 ]; then
+            echo "::error::$f is over F-Droid's 500 character limit."; exit 1
+          fi
       - name: Fetch real firmware images for the verification tests
         run: |
           mkdir -p "$RUNNER_TEMP/fw"
@@ -68,3 +77,36 @@ jobs:
         with:
           name: tasmohub-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+      # Runs last so it cannot overwrite the uploaded APK.
+      - name: Check the unsigned build F-Droid makes
+        env:
+          TASMOHUB_UNSIGNED: '1'
+        run: |
+          flutter build apk --release
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          if "$apksigner" verify "$apk" 2>/dev/null; then
+            echo "::error::TASMOHUB_UNSIGNED=1 still produced a signed APK"; exit 1
+          fi
+          echo "Unsigned APK OK"
+
+  # F-Droid builds each release from a git tag (UpdateCheckMode: Tags), so tag
+  # every new pubspec version once its build on main has passed.
+  tag:
+    needs: android
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag v<version> if it does not exist yet
+        run: |
+          v=$(sed -nE 's/^version:[[:space:]]*([^+]+)\+.*/\1/p' pubspec.yaml)
+          if git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then
+            echo "v$v already tagged"
+          else
+            git tag "v$v" "$GITHUB_SHA"
+            git push origin "v$v"
+            echo "Tagged v$v"
+          fi
