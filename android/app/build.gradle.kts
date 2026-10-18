@@ -29,9 +29,19 @@ android {
         versionName = flutter.versionName
     }
 
+    // F-Droid (and IzzyOnDroid) reject APKs that carry Google's encrypted
+    // dependency metadata block, which only the Play Store can read.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     // CI writes the release keystore from repository secrets. One stable key
     // means each new APK installs over the previous one and keeps app data.
     // Without the secrets (local builds) it falls back to the debug key.
+    // TASMOHUB_UNSIGNED=1 builds an unsigned release APK instead, which is
+    // what F-Droid's build server expects before it signs with its own key.
+    val unsigned = System.getenv("TASMOHUB_UNSIGNED") == "1"
     val releaseStore = System.getenv("TASMOHUB_KEYSTORE")?.let { file(it) }
     signingConfigs {
         if (releaseStore != null && releaseStore.exists()) {
@@ -46,8 +56,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.findByName("release")
-                ?: signingConfigs.getByName("debug")
+            signingConfig = if (unsigned) null
+                else signingConfigs.findByName("release")
+                    ?: signingConfigs.getByName("debug")
         }
     }
 }

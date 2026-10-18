@@ -1,0 +1,5 @@
+* Firmware update: status polls pause while a device is being flashed
+* Firmware update: a device left on the minimal build is shown as an error
+* Firmware update: an upload is retried when the connection drops
+* Firmware update: the ESP32 safeboot page is recognised even when the device never confirms the upload
+* About screen shows the GitHub link above the documentation links

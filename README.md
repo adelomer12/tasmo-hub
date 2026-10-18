@@ -91,6 +91,24 @@ The first scan triggers the iOS "Local Network" permission prompt.
 `.github/workflows/build.yml` builds a release APK as a CI artifact when the code
 is pushed to GitHub.
 
+## F-Droid
+
+The repo is set up to be built by F-Droid from source:
+
+- Store text, icon and per-version changelogs live in `fastlane/metadata/android/en-US/`.
+  Add `changelogs/<versionCode>.txt` (500 characters max) whenever the version in
+  `pubspec.yaml` goes up; CI warns when it is missing.
+- CI tags `v<version>` on `main` after a passing build; F-Droid picks up new releases from those tags.
+- `TASMOHUB_UNSIGNED=1 flutter build apk --release` builds the unsigned APK F-Droid signs itself.
+- `fdroid/com.adelhajjaj.tasmo_hub.yml` is the draft recipe for the fdroiddata repository.
+
+F-Droid signs with its own key, so its build cannot update an APK installed from
+GitHub Actions (or the other way round) without uninstalling first.
+
+## License
+
+GPL-3.0-or-later, see [LICENSE](LICENSE).
+
 ## Roadmap
 
 - iOS widgets
