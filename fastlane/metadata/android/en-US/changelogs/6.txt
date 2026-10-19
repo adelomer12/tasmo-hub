@@ -1,0 +1,1 @@
+* Signed APKs are now attached to each GitHub release, so the app can be installed and kept up to date with Obtainium
