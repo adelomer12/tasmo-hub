@@ -5,6 +5,20 @@ A local-only phone app (Android + iOS, Flutter) that discovers and controls
 No cloud, no account, no telemetry: the phone talks straight to each
 device's `/cm?cmnd=` HTTP API.
 
+## Install (Android)
+
+Each version is published as a [GitHub release](https://github.com/adelomer12/tasmo-hub/releases)
+with a signed APK (`tasmohub-v<version>.apk`).
+
+To get updates automatically, use [Obtainium](https://github.com/ImranR98/Obtainium):
+tap **Add App**, paste `https://github.com/adelomer12/tasmo-hub` as the source URL and
+tap **Add**. Obtainium installs the APK from the latest release and notifies you
+when a new one is published.
+
+All releases are signed with the same key, so they install over each other. An
+F-Droid build (if it appears there later) uses F-Droid's own key and cannot update
+this one without uninstalling first.
+
 ## Features (MVP)
 
 - **Discovery**: subnet scan (`192.168.20.0/24`, `192.168.20.10-80`, or a single IP)
@@ -89,7 +103,8 @@ iOS: for mDNS browsing on a real device Apple requires the
 The first scan triggers the iOS "Local Network" permission prompt.
 
 `.github/workflows/build.yml` builds a release APK as a CI artifact when the code
-is pushed to GitHub.
+is pushed to GitHub, and publishes it as a GitHub release when the version in
+`pubspec.yaml` goes up.
 
 ## F-Droid
 

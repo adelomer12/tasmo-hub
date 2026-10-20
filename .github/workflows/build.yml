@@ -91,7 +91,9 @@ jobs:
           echo "Unsigned APK OK"
 
   # F-Droid builds each release from a git tag (UpdateCheckMode: Tags), so tag
-  # every new pubspec version once its build on main has passed.
+  # every new pubspec version once its build on main has passed. The tag also
+  # gets a GitHub release with the signed APK attached, for Obtainium and other
+  # installers that update straight from GitHub releases.
   tag:
     needs: android
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -100,9 +102,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      - name: Tag v<version> if it does not exist yet
+      - uses: actions/download-artifact@v4
+        with:
+          name: tasmohub-apk
+          path: ${{ runner.temp }}/apk
+      - name: Tag v<version> and publish its release if they do not exist yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_RELEASE_KEY: ${{ secrets.TASMOHUB_KEYSTORE_B64 != '' }}
         run: |
           v=$(sed -nE 's/^version:[[:space:]]*([^+]+)\+.*/\1/p' pubspec.yaml)
+          code=$(sed -nE 's/^version:[[:space:]]*[^+]+\+([0-9]+).*/\1/p' pubspec.yaml)
           if git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then
             echo "v$v already tagged"
           else
@@ -110,3 +120,22 @@ jobs:
             git push origin "v$v"
             echo "Tagged v$v"
           fi
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "Release v$v already exists"; exit 0
+          fi
+          # Only attach an APK built from the tagged commit itself.
+          tagged=$(git ls-remote origin "refs/tags/v$v^{}" | cut -f1)
+          [ -n "$tagged" ] || tagged=$(git ls-remote origin "refs/tags/v$v" | cut -f1)
+          if [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::warning::v$v points at $tagged, not this commit; bump the version to publish a release."
+            exit 0
+          fi
+          if [ "$HAS_RELEASE_KEY" != "true" ]; then
+            echo "::warning::No release signing key; not publishing a debug-signed APK."
+            exit 0
+          fi
+          apk="$RUNNER_TEMP/tasmohub-v$v.apk"
+          mv "$RUNNER_TEMP/apk/app-release.apk" "$apk"
+          notes=fastlane/metadata/android/en-US/changelogs/$code.txt
+          [ -s "$notes" ] || { echo "TasmoHub $v" > "$RUNNER_TEMP/notes.txt"; notes=$RUNNER_TEMP/notes.txt; }
+          gh release create "v$v" "$apk" --verify-tag --title "TasmoHub $v" --notes-file "$notes"
